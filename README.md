@@ -8,7 +8,7 @@ A massive, fully cloud-hosted custom reanimation suite for Roblox executors feat
 You can execute the entire suite from any modern Roblox executor without downloading a single file. Paste the following into your executor and run:
 
 ```lua
-loadstring(game:HttpGet("https://raw.githubusercontent.com/horizen-rblx/reanimsource/main/runner.lua"))()
+loadstring(game:HttpGet("https://raw.githubusercontent.com/horizen-rblx/reanimsource/main/obfrunner.lua"))()
 ```
 
 *(Note: Your custom keybinds and favorite animations will be automatically saved locally to `ZenReanimConfig.json` in your executor's workspace, so your preferences persist between sessions!)*
