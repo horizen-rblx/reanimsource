@@ -414,6 +414,28 @@ end
 local activeAnim = nil
 local currentlyBinding = nil
 
+local function toggleAnimation(animName, animPath)
+    if activeAnim == animName then
+        api.stop_animation()
+        setReanimState(false)
+        activeAnim = nil
+    else
+        task.spawn(function()
+            if not api.is_reanimated() then
+                setReanimState(true)
+                task.wait(1.2) 
+            end
+            
+            local result = api.play_animation(animPath, currentSpeed)
+            if type(result) == "string" then
+                warn("Reanimations Error:", result)
+            else
+                activeAnim = animName
+            end
+        end)
+    end
+end
+
 local function populateList(filterText)
     for _, btn in ipairs(animButtons) do
         btn:Destroy()
@@ -495,19 +517,7 @@ local function populateList(filterText)
                     tween(btn, {BackgroundColor3 = C.surfaceHover, TextColor3 = C.text}, 0.2)
                 end)
                 
-                task.spawn(function()
-                    if not api.is_reanimated() then
-                        setReanimState(true)
-                        task.wait(1.2) 
-                    end
-                    
-                    local result = api.play_animation(anim.path, currentSpeed)
-                    if type(result) == "string" then
-                        warn("Reanimations Error:", result)
-                    else
-                        activeAnim = anim.name
-                    end
-                end)
+                toggleAnimation(anim.name, anim.path)
             end)
             
             table.insert(animButtons, btn)
@@ -586,26 +596,12 @@ UserInputService.InputBegan:Connect(function(input, gp)
         if not gp then
             for animName, boundKey in pairs(savedConfig.binds) do
                 if input.KeyCode.Name == boundKey then
-                    if activeAnim == animName then
-                        api.stop_animation()
-                        activeAnim = nil
-                    else
-                        task.spawn(function()
-                            if api.is_reanimated() then
-                                local path = nil
-                                for _, a in ipairs(animations) do
-                                    if a.name == animName then path = a.path break end
-                                end
-                                if path then
-                                    local result = api.play_animation(path, currentSpeed)
-                                    if type(result) == "string" then
-                                        warn("Reanimations Error:", result)
-                                    else
-                                        activeAnim = animName
-                                    end
-                                end
-                            end
-                        end)
+                    local path = nil
+                    for _, a in ipairs(animations) do
+                        if a.name == animName then path = a.path break end
+                    end
+                    if path then
+                        toggleAnimation(animName, path)
                     end
                 end
             end
