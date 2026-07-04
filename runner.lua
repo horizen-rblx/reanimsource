@@ -47,71 +47,44 @@ if CoreGui:FindFirstChild("ZenReanimationsRunner") then
     CoreGui.ZenReanimationsRunner:Destroy()
 end
 
--- 1. Load the Local Module
+-- 1. Load the Cloud Module
 local api
-local possible_paths = {
-    "Animations-main/module.lua",
-    "Animations-main/Animations-main/module.lua",
-    "Animations/module.lua",
-    "module.lua"
-}
+local success, result = pcall(function()
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/horizen-rblx/reanimsource/main/module.lua"))()
+end)
 
-local loaded_path = nil
-if isfile and readfile and loadstring then
-    for _, path in ipairs(possible_paths) do
-        if isfile(path) then
-            loaded_path = path
-            break
-        end
-    end
-end
-
-if loaded_path then
-    api = loadstring(readfile(loaded_path))()
+if success and type(result) == "table" then
+    api = result
 else
-    local msg = "Zen Reanimations: Could not find module.lua locally. Please ensure the Animations-main folder is placed directly inside your executor's 'workspace' folder."
-    warn(msg)
-    
-    -- Print out the folders in the workspace to help the user debug
-    if listfiles then
-        pcall(function()
-            local files = listfiles("") or listfiles("./") or listfiles("/")
-            warn("Files found in your executor's root workspace:")
-            for _, f in ipairs(files) do
-                warn(" - " .. tostring(f))
-            end
-        end)
-    end
-    
-    -- Optional: show an error GUI here or just return
+    warn("Zen Reanimations: Failed to load module.lua from GitHub. Error: " .. tostring(result))
     return
 end
 
--- 2. Load Animations List
-local anims_dir = "Animations-main/Animations-main"
-if loaded_path then
-    -- Derive the animations directory from where we found module.lua
-    local base_dir = loaded_path:gsub("module%.lua$", "")
-    anims_dir = base_dir .. "Animations-main"
-end
-
+-- 2. Load Animations List from Cloud
 local animations = {}
-if listfiles then
-    pcall(function()
-        local files = listfiles(anims_dir)
-        for _, file in ipairs(files) do
-            if file:sub(-4) == ".lua" then
-                local name = file:match("([^/\\]+)$")
-                if name ~= "module.lua" and name ~= "runner.lua" and name ~= "reanim.lua" and name ~= "og reanim.lua" then
-                    table.insert(animations, {name = name:sub(1, -5), path = file})
-                end
+local HttpService = game:GetService("HttpService")
+
+local anim_success, anim_data = pcall(function()
+    return game:HttpGet("https://raw.githubusercontent.com/horizen-rblx/reanimsource/main/animations.json")
+end)
+
+if anim_success then
+    local decode_success, decoded = pcall(function()
+        return HttpService:JSONDecode(anim_data)
+    end)
+    if decode_success and type(decoded) == "table" then
+        for _, item in ipairs(decoded) do
+            if item.name and item.path then
+                table.insert(animations, item)
             end
         end
-    end)
+    else
+        warn("Zen Reanimations: Failed to parse animations.json")
+    end
+else
+    warn("Zen Reanimations: Failed to download animations.json from GitHub")
 end
-table.sort(animations, function(a, b) return a.name < b.name end)
 
-local HttpService = game:GetService("HttpService")
 local CONFIG_FILE = "ZenReanimConfig.json"
 local savedConfig = { favs = {}, binds = {} }
 
