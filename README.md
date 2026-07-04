@@ -42,6 +42,11 @@ Now, `runner.lua` makes a single, unauthenticated HTTP request to fetch `animati
 
 The result is a zero-dependency, lightning-fast cloud loader.
 
+### 4. Bypassing the Reanimation Patches (The CBody Method)
+Historically, reanimating involved destroying the character's joints and using basic loops to teleport the parts. However, recent Roblox physics updates and anti-exploits (especially in popular games like Mic Up) heavily patched these old methods, causing parts to freeze, fall through the map, or fail to replicate to the server.
+
+**The Solution (CBody/Clone Trickery):** This new method bypasses those patches entirely. Instead of just breaking the original character, the engine creates a perfect local clone (the "CBody") that the client animates flawlessly using CFrame interpolation. The engine then hides your real, raw character (usually by displacing the `HumanoidRootPart` or scaling it down) and exploits **Network Ownership**. Because the client still retains physics ownership over their own unanchored limbs, we rapidly snap the real limbs to the CBody's animated limbs. This tricks the Roblox server into accepting the physics data and replicating your custom animations to everyone else in the server, bypassing modern collision and replication patches completely!
+
 ---
 
 ## 🎨 Features
