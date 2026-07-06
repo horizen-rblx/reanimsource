@@ -431,9 +431,32 @@ API.play_animation = function(url, speed)
     if not keyframe_data then
         local response
         if url:sub(1, 4) == "http" then
-            local success, http_res = pcall(game.HttpGet, game, url);
-            if not success then return "Animation Error: Failed to fetch URL." end
-            response = http_res
+            local cache_path
+            if isfolder and makefolder and isfile and readfile and writefile then
+                if not isfolder("ZenAnimCache") then
+                    pcall(makefolder, "ZenAnimCache")
+                end
+                local safe_name = url:match("([^/]+)$") or "unknown.lua"
+                safe_name = safe_name:gsub("%%20", "_"):gsub("%%27", "")
+                cache_path = "ZenAnimCache/" .. safe_name
+            end
+            
+            if cache_path and isfile(cache_path) then
+                local success, file_res = pcall(readfile, cache_path)
+                if success then
+                    response = file_res
+                end
+            end
+            
+            if not response then
+                local success, http_res = pcall(game.HttpGet, game, url);
+                if not success then return "Animation Error: Failed to fetch URL." end
+                response = http_res
+                
+                if cache_path then
+                    pcall(writefile, cache_path, response)
+                end
+            end
         else
             if type(readfile) == "function" then
                 local success, file_res = pcall(readfile, url)
@@ -634,5 +657,27 @@ API.get_real_character = function(player)
 	if typeof(player) == "string" then return nil end;
 	return zen.real_chars[player];
 end;
+
+--- Preloads and caches an animation in the background without playing it
+-- @param url (string) - The URL of the keyframe script.
+API.preload_animation = function(url)
+    if not (url and url:sub(1, 4) == "http") then return end
+    if not (isfolder and makefolder and isfile and readfile and writefile) then return end
+    
+    local safe_name = url:match("([^/]+)$") or "unknown.lua"
+    safe_name = safe_name:gsub("%%20", "_"):gsub("%%27", "")
+    local cache_path = "ZenAnimCache/" .. safe_name
+    
+    if not isfolder("ZenAnimCache") then
+        pcall(makefolder, "ZenAnimCache")
+    end
+    
+    if not isfile(cache_path) then
+        local success, http_res = pcall(game.HttpGet, game, url);
+        if success then
+            pcall(writefile, cache_path, http_res)
+        end
+    end
+end
 
 return API;

@@ -104,6 +104,24 @@ local function saveConfig()
     end
 end
 
+
+-- Background Fetch Favorites
+task.spawn(function()
+    task.wait(2) -- Let UI load first
+    if api and api.preload_animation then
+        for animName, _ in pairs(savedConfig.favs) do
+            local path = nil
+            for _, a in ipairs(animations) do
+                if a.name == animName then path = a.path break end
+            end
+            if path then
+                api.preload_animation(path)
+                task.wait(0.5) -- Prevent network spam
+            end
+        end
+    end
+end)
+
 -- 3. Create GUI
 local gui = Instance.new("ScreenGui")
 gui.Name = "ZenReanimationsRunner"
