@@ -424,18 +424,27 @@ local function setReanimState(state)
     end
 end
 
+local isProcessing = false
+
 local function toggleReanim()
+    if isProcessing then return end
+    isProcessing = true
     local isReanim = api.is_reanimated()
     setReanimState(not isReanim)
+    task.wait(0.2)
+    isProcessing = false
 end
 
 local activeAnim = nil
 local currentlyBinding = nil
 
 local function toggleAnimation(animName, animPath)
+    if isProcessing then return end
+    isProcessing = true
     if activeAnim == animName then
         api.stop_animation()
         activeAnim = nil
+        isProcessing = false
     else
         task.spawn(function()
             if not api.is_reanimated() then
@@ -458,6 +467,8 @@ local function toggleAnimation(animName, animPath)
             else
                 activeAnim = animName
             end
+            task.wait(0.1)
+            isProcessing = false
         end)
     end
 end
