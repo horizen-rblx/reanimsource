@@ -441,7 +441,16 @@ local function toggleAnimation(animName, animPath)
         task.spawn(function()
             if not api.is_reanimated() then
                 setReanimState(true)
-                task.wait(1.2) 
+                local clone = api.get_clone()
+                if clone then
+                    local waited = 0
+                    while not clone:FindFirstChild("HumanoidRootPart") and waited < 1.0 do
+                        waited = waited + task.wait(0.05)
+                    end
+                    task.wait(0.15) 
+                else
+                    task.wait(0.5) 
+                end
             end
             
             local result = api.play_animation(animPath, currentSpeed)
