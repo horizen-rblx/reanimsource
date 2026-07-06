@@ -435,7 +435,6 @@ local currentlyBinding = nil
 local function toggleAnimation(animName, animPath)
     if activeAnim == animName then
         api.stop_animation()
-        setReanimState(false)
         activeAnim = nil
     else
         task.spawn(function()

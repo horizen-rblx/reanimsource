@@ -416,12 +416,10 @@ API.play_animation = function(url, speed)
         for _, track in ipairs(clone_anim_controller:GetPlayingAnimationTracks()) do
             track:Stop()
         end
-        local animator = clone_anim_controller:FindFirstChildOfClass("Animator")
-        if animator then animator:Destroy() end
     end
     local clone_animate_script = clone_char:FindFirstChild("Animate")
     if clone_animate_script then
-        clone_animate_script.Enabled = false
+        clone_animate_script.Disabled = true
     end
     
     local anim = zen.animation;
