@@ -268,20 +268,32 @@ tabsFrame.Position = UDim2.new(0, 20, 0, 70)
 tabsFrame.BackgroundTransparency = 1
 tabsFrame.Parent = mainFrame
 
-local tabAll = Instance.new("TextButton")
-tabAll.Size = UDim2.new(0.5, -5, 1, 0)
-tabAll.BackgroundColor3 = C.surfaceHover
-tabAll.Text = "All"
-tabAll.TextColor3 = C.text
-tabAll.Font = Enum.Font.GothamSemibold
-tabAll.TextSize = 13
-tabAll.Parent = tabsFrame
-applyCorner(tabAll, 6)
-local tabAllStroke = applyStroke(tabAll, C.accent, 1, 0)
+local tabMain = Instance.new("TextButton")
+tabMain.Size = UDim2.new(0.33, -5, 1, 0)
+tabMain.BackgroundColor3 = C.surfaceHover
+tabMain.Text = "Main"
+tabMain.TextColor3 = C.text
+tabMain.Font = Enum.Font.GothamSemibold
+tabMain.TextSize = 13
+tabMain.Parent = tabsFrame
+applyCorner(tabMain, 6)
+local tabMainStroke = applyStroke(tabMain, C.accent, 1, 0)
+
+local tabUni = Instance.new("TextButton")
+tabUni.Size = UDim2.new(0.34, -5, 1, 0)
+tabUni.Position = UDim2.new(0.33, 5, 0, 0)
+tabUni.BackgroundColor3 = C.surface
+tabUni.Text = "Unicorn's"
+tabUni.TextColor3 = C.textMuted
+tabUni.Font = Enum.Font.GothamSemibold
+tabUni.TextSize = 13
+tabUni.Parent = tabsFrame
+applyCorner(tabUni, 6)
+local tabUniStroke = applyStroke(tabUni, C.divider, 1, 0)
 
 local tabFavs = Instance.new("TextButton")
-tabFavs.Size = UDim2.new(0.5, -5, 1, 0)
-tabFavs.Position = UDim2.new(0.5, 5, 0, 0)
+tabFavs.Size = UDim2.new(0.33, -5, 1, 0)
+tabFavs.Position = UDim2.new(0.67, 5, 0, 0)
 tabFavs.BackgroundColor3 = C.surface
 tabFavs.Text = "Favorites"
 tabFavs.TextColor3 = C.textMuted
@@ -291,7 +303,7 @@ tabFavs.Parent = tabsFrame
 applyCorner(tabFavs, 6)
 local tabFavsStroke = applyStroke(tabFavs, C.divider, 1, 0)
 
-local currentTab = "All"
+local currentTab = "Main"
 
 -- Search Bar
 -- Speed Slider
@@ -381,10 +393,80 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
+-- Speed Presets
+local presetSpeeds = {0.5, 1.0, 1.5, 3.0}
+local presetsContainer = Instance.new("Frame")
+presetsContainer.Size = UDim2.new(1, -40, 0, 46)
+presetsContainer.Position = UDim2.new(0, 20, 0, 150)
+presetsContainer.BackgroundTransparency = 1
+presetsContainer.Parent = mainFrame
+
+local presetLabel = Instance.new("TextLabel")
+presetLabel.Size = UDim2.new(1, 0, 0, 12)
+presetLabel.Position = UDim2.new(0, 5, 0, -2)
+presetLabel.BackgroundTransparency = 1
+presetLabel.Text = "Speed Presets — click speed to edit, [+] to bind key"
+presetLabel.TextColor3 = C.textMuted
+presetLabel.Font = Enum.Font.GothamSemibold
+presetLabel.TextSize = 10
+presetLabel.TextXAlignment = Enum.TextXAlignment.Left
+presetLabel.Parent = presetsContainer
+
+local presetWidth = 1 / #presetSpeeds
+for i, spd in ipairs(presetSpeeds) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(presetWidth, -4, 0, 20)
+    btn.Position = UDim2.new((i-1)*presetWidth, 2, 0, 12)
+    btn.BackgroundColor3 = C.surface
+    btn.Text = string.format("%.1f", spd)
+    btn.TextColor3 = C.text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 12
+    btn.Parent = presetsContainer
+    applyCorner(btn, 4)
+    applyStroke(btn, C.divider, 1, 0)
+    
+    local bindBtn = Instance.new("TextButton")
+    bindBtn.Size = UDim2.new(presetWidth, -4, 0, 16)
+    bindBtn.Position = UDim2.new((i-1)*presetWidth, 2, 0, 34)
+    bindBtn.BackgroundColor3 = C.input
+    local boundKey = savedConfig.binds["SPEED_"..tostring(spd)]
+    bindBtn.Text = boundKey and ("[" .. boundKey .. "]") or "[+]"
+    bindBtn.TextColor3 = boundKey and C.accent or C.textMuted
+    bindBtn.Font = Enum.Font.GothamSemibold
+    bindBtn.TextSize = 10
+    bindBtn.Parent = presetsContainer
+    applyCorner(bindBtn, 4)
+    applyStroke(bindBtn, C.divider, 1, 0)
+
+    btn.MouseButton1Click:Connect(function()
+        currentSpeed = spd
+        sliderValue.Text = string.format("%.1fx", currentSpeed)
+        
+        local minSpd, maxSpd = 0.1, 3.0
+        local percent = (spd - minSpd) / (maxSpd - minSpd)
+        sliderFill.Size = UDim2.new(percent, 0, 1, 0)
+        
+        if api.is_reanimated() then
+            api.set_animation_speed(currentSpeed)
+        end
+        tween(btn, {BackgroundColor3 = C.accent, TextColor3 = C.bgCard}, 0.1)
+        task.delay(0.15, function()
+            tween(btn, {BackgroundColor3 = C.surface, TextColor3 = C.text}, 0.2)
+        end)
+    end)
+    
+    bindBtn.MouseButton1Click:Connect(function()
+        currentlyBinding = {name = "SPEED_"..tostring(spd), btn = bindBtn, isSpeed = true}
+        bindBtn.Text = "[...]"
+        bindBtn.TextColor3 = C.textMuted
+    end)
+end
+
 -- Search Bar
 local searchBox = Instance.new("TextBox")
 searchBox.Size = UDim2.new(1, -40, 0, 36)
-searchBox.Position = UDim2.new(0, 20, 0, 150)
+searchBox.Position = UDim2.new(0, 20, 0, 200)
 searchBox.BackgroundColor3 = C.input
 searchBox.Text = ""
 searchBox.PlaceholderText = "Search Animations..."
@@ -398,8 +480,8 @@ applyStroke(searchBox, C.divider, 1, 0)
 
 -- Animations List
 local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size = UDim2.new(1, -30, 1, -196)
-scrollFrame.Position = UDim2.new(0, 20, 0, 196)
+scrollFrame.Size = UDim2.new(1, -30, 1, -246)
+scrollFrame.Position = UDim2.new(0, 20, 0, 246)
 scrollFrame.BackgroundTransparency = 1
 scrollFrame.ScrollBarThickness = 4
 scrollFrame.ScrollBarImageColor3 = C.textMuted
@@ -484,6 +566,10 @@ local function populateList(filterText)
     for _, anim in ipairs(animations) do
         local isFav = savedConfig.favs[anim.name]
         if currentTab == "Favorites" and not isFav then continue end
+        
+        local category = anim.category or "Main"
+        if currentTab == "Main" and category ~= "Main" then continue end
+        if currentTab == "Unicorns" and category ~= "Unicorns" then continue end
         
         if filterText == "" or anim.name:lower():find(filterText) then
             local btn = Instance.new("TextButton")
@@ -570,31 +656,25 @@ searchBox.Changed:Connect(function(prop)
     end
 end)
 
-tabAll.MouseButton1Click:Connect(function()
-    currentTab = "All"
-    tween(tabAll, {BackgroundColor3 = C.surfaceHover}, 0.2)
-    tween(tabAllStroke, {Color = C.accent}, 0.2)
-    tabAll.TextColor3 = C.text
+local function updateTabsUI(selectedTab)
+    currentTab = selectedTab
     
-    tween(tabFavs, {BackgroundColor3 = C.surface}, 0.2)
-    tween(tabFavsStroke, {Color = C.divider}, 0.2)
-    tabFavs.TextColor3 = C.textMuted
-    
-    populateList(searchBox.Text)
-end)
+    local function setTab(tab, stroke, isActive)
+        tween(tab, {BackgroundColor3 = isActive and C.surfaceHover or C.surface}, 0.2)
+        tween(stroke, {Color = isActive and C.accent or C.divider}, 0.2)
+        tab.TextColor3 = isActive and C.text or C.textMuted
+    end
 
-tabFavs.MouseButton1Click:Connect(function()
-    currentTab = "Favorites"
-    tween(tabFavs, {BackgroundColor3 = C.surfaceHover}, 0.2)
-    tween(tabFavsStroke, {Color = C.accent}, 0.2)
-    tabFavs.TextColor3 = C.text
-    
-    tween(tabAll, {BackgroundColor3 = C.surface}, 0.2)
-    tween(tabAllStroke, {Color = C.divider}, 0.2)
-    tabAll.TextColor3 = C.textMuted
+    setTab(tabMain, tabMainStroke, selectedTab == "Main")
+    setTab(tabUni, tabUniStroke, selectedTab == "Unicorns")
+    setTab(tabFavs, tabFavsStroke, selectedTab == "Favorites")
     
     populateList(searchBox.Text)
-end)
+end
+
+tabMain.MouseButton1Click:Connect(function() updateTabsUI("Main") end)
+tabUni.MouseButton1Click:Connect(function() updateTabsUI("Unicorns") end)
+tabFavs.MouseButton1Click:Connect(function() updateTabsUI("Favorites") end)
 
 populateList("")
 
@@ -633,12 +713,26 @@ UserInputService.InputBegan:Connect(function(input, gp)
         if not gp then
             for animName, boundKey in pairs(savedConfig.binds) do
                 if input.KeyCode.Name == boundKey then
-                    local path = nil
-                    for _, a in ipairs(animations) do
-                        if a.name == animName then path = a.path break end
-                    end
-                    if path then
-                        toggleAnimation(animName, path)
+                    if string.sub(animName, 1, 6) == "SPEED_" then
+                        local spd = tonumber(string.sub(animName, 7))
+                        if spd then
+                            currentSpeed = spd
+                            sliderValue.Text = string.format("%.1fx", currentSpeed)
+                            local minSpd, maxSpd = 0.1, 3.0
+                            local percent = (spd - minSpd) / (maxSpd - minSpd)
+                            sliderFill.Size = UDim2.new(percent, 0, 1, 0)
+                            if api.is_reanimated() then
+                                api.set_animation_speed(currentSpeed)
+                            end
+                        end
+                    else
+                        local path = nil
+                        for _, a in ipairs(animations) do
+                            if a.name == animName then path = a.path break end
+                        end
+                        if path then
+                            toggleAnimation(animName, path)
+                        end
                     end
                 end
             end
