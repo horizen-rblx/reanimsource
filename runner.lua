@@ -393,6 +393,8 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
+local currentlyBinding = nil
+
 -- Speed Presets
 local presetSpeeds = {0.5, 1.0, 1.5, 3.0}
 local presetsContainer = Instance.new("Frame")
@@ -520,7 +522,8 @@ local function toggleReanim()
 end
 
 local activeAnim = nil
-local currentlyBinding = nil
+
+local currentSpeed = 1.0
 
 local function toggleAnimation(animName, animPath)
     if isProcessing then return end
