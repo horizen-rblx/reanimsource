@@ -437,8 +437,7 @@ for i, spd in ipairs(presetSpeeds) do
     bindBtn.Text = boundKey and ("[" .. boundKey .. "]") or "[+]"
     bindBtn.TextColor3 = boundKey and C.accent or C.textMuted
     bindBtn.Font = Enum.Font.GothamSemibold
-    bindBtn.TextScaled = true
-    bindBtn.TextWrapped = true
+    bindBtn.TextSize = 11
     bindBtn.Parent = presetsContainer
     applyCorner(bindBtn, 4)
     applyStroke(bindBtn, C.divider, 1, 0)
