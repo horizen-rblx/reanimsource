@@ -396,7 +396,7 @@ end)
 -- Speed Presets
 local presetSpeeds = {0.5, 1.0, 1.5, 3.0}
 local presetsContainer = Instance.new("Frame")
-presetsContainer.Size = UDim2.new(1, -40, 0, 46)
+presetsContainer.Size = UDim2.new(1, -40, 0, 60)
 presetsContainer.Position = UDim2.new(0, 20, 0, 150)
 presetsContainer.BackgroundTransparency = 1
 presetsContainer.Parent = mainFrame
@@ -415,8 +415,8 @@ presetLabel.Parent = presetsContainer
 local presetWidth = 1 / #presetSpeeds
 for i, spd in ipairs(presetSpeeds) do
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(presetWidth, -4, 0, 20)
-    btn.Position = UDim2.new((i-1)*presetWidth, 2, 0, 12)
+    btn.Size = UDim2.new(presetWidth, -6, 0, 22)
+    btn.Position = UDim2.new((i-1)*presetWidth, 3, 0, 14)
     btn.BackgroundColor3 = C.surface
     btn.Text = string.format("%.1f", spd)
     btn.TextColor3 = C.text
@@ -427,14 +427,16 @@ for i, spd in ipairs(presetSpeeds) do
     applyStroke(btn, C.divider, 1, 0)
     
     local bindBtn = Instance.new("TextButton")
-    bindBtn.Size = UDim2.new(presetWidth, -4, 0, 16)
-    bindBtn.Position = UDim2.new((i-1)*presetWidth, 2, 0, 34)
+    bindBtn.Size = UDim2.new(presetWidth, -6, 0, 20)
+    bindBtn.Position = UDim2.new((i-1)*presetWidth, 3, 0, 40)
     bindBtn.BackgroundColor3 = C.input
+    bindBtn.ZIndex = 5
     local boundKey = savedConfig.binds["SPEED_"..tostring(spd)]
     bindBtn.Text = boundKey and ("[" .. boundKey .. "]") or "[+]"
     bindBtn.TextColor3 = boundKey and C.accent or C.textMuted
     bindBtn.Font = Enum.Font.GothamSemibold
-    bindBtn.TextSize = 10
+    bindBtn.TextScaled = true
+    bindBtn.TextWrapped = true
     bindBtn.Parent = presetsContainer
     applyCorner(bindBtn, 4)
     applyStroke(bindBtn, C.divider, 1, 0)
@@ -466,7 +468,7 @@ end
 -- Search Bar
 local searchBox = Instance.new("TextBox")
 searchBox.Size = UDim2.new(1, -40, 0, 36)
-searchBox.Position = UDim2.new(0, 20, 0, 200)
+searchBox.Position = UDim2.new(0, 20, 0, 220)
 searchBox.BackgroundColor3 = C.input
 searchBox.Text = ""
 searchBox.PlaceholderText = "Search Animations..."
@@ -480,8 +482,8 @@ applyStroke(searchBox, C.divider, 1, 0)
 
 -- Animations List
 local scrollFrame = Instance.new("ScrollingFrame")
-scrollFrame.Size = UDim2.new(1, -30, 1, -246)
-scrollFrame.Position = UDim2.new(0, 20, 0, 246)
+scrollFrame.Size = UDim2.new(1, -30, 1, -266)
+scrollFrame.Position = UDim2.new(0, 20, 0, 266)
 scrollFrame.BackgroundTransparency = 1
 scrollFrame.ScrollBarThickness = 4
 scrollFrame.ScrollBarImageColor3 = C.textMuted
