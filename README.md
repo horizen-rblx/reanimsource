@@ -1,4 +1,4 @@
-# ZEN METHOD REANIM 
+# METHOD REANIM 
 
 A massive, fully cloud-hosted custom reanimation suite for Roblox executors featuring over 1,800+ animations, a sleek macOS-inspired UI, dynamic keybinding, and zero local dependencies.
 
@@ -18,7 +18,7 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/horizen-rblx/reanimso
 ## 🛠️ The Journey: How We Figured It Out
 *A note for the developer enthusiasts diving into this repository.*
 
-Building a flawless, high-performance reanimation suite that supports thousands of custom `.lua` animation files without completely locking up the executor was an architectural challenge. Here is a breakdown of the hurdles we faced and how we architected the "Zen Method" to solve them:
+Building a flawless, high-performance reanimation suite that supports thousands of custom `.lua` animation files without completely locking up the executor was an architectural challenge. Here is a breakdown of the hurdles we faced and how we architected the "Reanim Method" to solve them:
 
 ### 1. Separation of Concerns (Frontend vs. Engine)
 Originally, many reanimation scripts bundle everything into one massive, unreadable file. We separated the architecture into two distinct halves:
