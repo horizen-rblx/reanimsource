@@ -612,8 +612,8 @@ local function populateList(filterText)
             
             -- Star Icon
             local starBtn = Instance.new("TextButton")
-            starBtn.Size = UDim2.new(0, 30, 1, 0)
-            starBtn.Position = UDim2.new(0, 20, 0, 0)
+            starBtn.Size = UDim2.new(0, 30, 0, 24)
+            starBtn.Position = UDim2.new(1, -125, 0.5, -12)
             starBtn.BackgroundTransparency = 1
             starBtn.Text = isFav and "★" or "☆"
             starBtn.TextColor3 = isFav and C.accent or C.textMuted
@@ -722,8 +722,20 @@ tabFavs.MouseButton1Click:Connect(function() updateTabsUI("Favorites") end)
 populateList("")
 
 -- Button Actions
-toggleBtn.MouseEnter:Connect(function() tween(toggleBtn, {BackgroundColor3 = C.surfaceHover}) end)
-toggleBtn.MouseLeave:Connect(function() tween(toggleBtn, {BackgroundColor3 = C.bgCard}) end)
+toggleBtn.MouseEnter:Connect(function()
+    if api.is_reanimated() then
+        tween(toggleBtn, {BackgroundColor3 = C.textMuted})
+    else
+        tween(toggleBtn, {BackgroundColor3 = C.surfaceHover})
+    end
+end)
+toggleBtn.MouseLeave:Connect(function()
+    if api.is_reanimated() then
+        tween(toggleBtn, {BackgroundColor3 = C.text})
+    else
+        tween(toggleBtn, {BackgroundColor3 = C.bgCard})
+    end
+end)
 
 toggleBtn.MouseButton1Click:Connect(function()
     toggleReanim()
