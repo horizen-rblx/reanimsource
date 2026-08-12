@@ -176,7 +176,7 @@ titleBarMask.Parent = titleBar
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 12, 0, 12)
 closeBtn.Position = UDim2.new(0, 15, 0.5, -6)
-closeBtn.BackgroundColor3 = C.danger
+closeBtn.BackgroundColor3 = Color3.fromRGB(255, 90, 90)
 closeBtn.Text = ""
 closeBtn.AutoButtonColor = false
 closeBtn.Parent = titleBar
@@ -185,7 +185,7 @@ applyCorner(closeBtn, 6)
 local minBtn = Instance.new("TextButton")
 minBtn.Size = UDim2.new(0, 12, 0, 12)
 minBtn.Position = UDim2.new(0, 35, 0.5, -6)
-minBtn.BackgroundColor3 = C.danger
+minBtn.BackgroundColor3 = Color3.fromRGB(255, 190, 60)
 minBtn.Text = ""
 minBtn.AutoButtonColor = false
 minBtn.Parent = titleBar
@@ -217,12 +217,12 @@ toggleBtn.TextColor3 = C.text
 toggleBtn.Font = Enum.Font.GothamSemibold
 toggleBtn.TextSize = 12
 toggleBtn.Parent = controlsFrame
-applyCorner(toggleBtn, 6)
+applyCorner(toggleBtn, 15)
 applyStroke(toggleBtn, C.divider, 1, 0)
 
 local isMinimized = false
-minBtn.MouseEnter:Connect(function() tween(minBtn, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, 0.15) end)
-minBtn.MouseLeave:Connect(function() tween(minBtn, {BackgroundColor3 = C.danger}, 0.15) end)
+minBtn.MouseEnter:Connect(function() tween(minBtn, {BackgroundColor3 = Color3.fromRGB(255, 220, 100)}, 0.15) end)
+minBtn.MouseLeave:Connect(function() tween(minBtn, {BackgroundColor3 = Color3.fromRGB(255, 190, 60)}, 0.15) end)
 minBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
     if isMinimized then
@@ -232,8 +232,8 @@ minBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-closeBtn.MouseEnter:Connect(function() tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, 0.15) end)
-closeBtn.MouseLeave:Connect(function() tween(closeBtn, {BackgroundColor3 = C.danger}, 0.15) end)
+closeBtn.MouseEnter:Connect(function() tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(255, 130, 130)}, 0.15) end)
+closeBtn.MouseLeave:Connect(function() tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(255, 90, 90)}, 0.15) end)
 closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
 
 -- Dragging logic
@@ -502,10 +502,10 @@ local function setReanimState(state)
     api.reanimate(state)
     if state then
         toggleBtn.Text = "Disable Reanim"
-        toggleBtn.TextColor3 = C.success
+        tween(toggleBtn, {BackgroundColor3 = C.text, TextColor3 = C.bg}, 0.2)
     else
         toggleBtn.Text = "Enable Reanim"
-        toggleBtn.TextColor3 = C.text
+        tween(toggleBtn, {BackgroundColor3 = C.bgCard, TextColor3 = C.text}, 0.2)
     end
 end
 
