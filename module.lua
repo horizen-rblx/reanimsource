@@ -290,6 +290,14 @@ API._reanimate_internal = function(bool, remote, args)
 		end;
 		zen.clones[player] = cloned_char;
 		set_model_transparency(cloned_char, 1);
+		
+		-- Destroy tags on the real character so they don't overlap with the new tags the main script will add to the cloned character
+		for _, desc in ipairs(real_char:GetDescendants()) do
+			if desc:IsA("BillboardGui") or desc:IsA("SurfaceGui") then
+				desc:Destroy();
+			end
+		end
+		
 		local saved_gui_states = {};
 		local player_gui = player:FindFirstChildWhichIsA("PlayerGui");
 		if player_gui then
