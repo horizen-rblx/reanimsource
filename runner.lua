@@ -539,7 +539,6 @@ local function toggleAnimation(animName, animPath)
         api.stop_animation()
         activeAnim = nil
         isProcessing = false
-        populateList(searchBox.Text)
     else
         task.spawn(function()
             if not api.is_reanimated() then
@@ -561,7 +560,6 @@ local function toggleAnimation(animName, animPath)
                 warn("Reanimations Error:", result)
             else
                 activeAnim = animName
-                populateList(searchBox.Text)
             end
             task.wait(0.1)
             isProcessing = false
@@ -673,6 +671,8 @@ local function populateList(filterText)
                     if activeAnim ~= anim.name then tween(btn, {BackgroundColor3 = C.surfaceHover, TextColor3 = C.text}, 0.2) end
                 end)
                 toggleAnimation(anim.name, anim.path)
+                task.wait(0.15)
+                populateList(searchBox.Text)
             end)
             
             table.insert(animButtons, btn)
