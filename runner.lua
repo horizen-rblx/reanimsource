@@ -263,45 +263,51 @@ end)
 local currentSpeed = 1.0
 
 local tabsFrame = Instance.new("Frame")
-tabsFrame.Size = UDim2.new(1, -40, 0, 30)
+tabsFrame.Size = UDim2.new(1, -40, 0, 36)
 tabsFrame.Position = UDim2.new(0, 20, 0, 70)
-tabsFrame.BackgroundTransparency = 1
+tabsFrame.BackgroundColor3 = C.input
 tabsFrame.Parent = mainFrame
+applyCorner(tabsFrame, 8)
+applyStroke(tabsFrame, C.divider, 1, 0)
+
+local tabIndicator = Instance.new("Frame")
+tabIndicator.Size = UDim2.new(0.333, -4, 1, -8)
+tabIndicator.Position = UDim2.new(0, 4, 0, 4)
+tabIndicator.BackgroundColor3 = C.surfaceHover
+tabIndicator.BorderSizePixel = 0
+tabIndicator.Parent = tabsFrame
+applyCorner(tabIndicator, 6)
+applyStroke(tabIndicator, C.divider, 1, 0)
 
 local tabMain = Instance.new("TextButton")
-tabMain.Size = UDim2.new(0.33, -5, 1, 0)
-tabMain.BackgroundColor3 = C.surfaceHover
+tabMain.Size = UDim2.new(0.333, 0, 1, 0)
+tabMain.Position = UDim2.new(0, 0, 0, 0)
+tabMain.BackgroundTransparency = 1
 tabMain.Text = "Main"
 tabMain.TextColor3 = C.text
 tabMain.Font = Enum.Font.GothamSemibold
 tabMain.TextSize = 13
 tabMain.Parent = tabsFrame
-applyCorner(tabMain, 6)
-local tabMainStroke = applyStroke(tabMain, C.accent, 1, 0)
 
 local tabUni = Instance.new("TextButton")
-tabUni.Size = UDim2.new(0.34, -5, 1, 0)
-tabUni.Position = UDim2.new(0.33, 5, 0, 0)
-tabUni.BackgroundColor3 = C.surface
+tabUni.Size = UDim2.new(0.333, 0, 1, 0)
+tabUni.Position = UDim2.new(0.333, 0, 0, 0)
+tabUni.BackgroundTransparency = 1
 tabUni.Text = "Unicorn's"
 tabUni.TextColor3 = C.textMuted
 tabUni.Font = Enum.Font.GothamSemibold
 tabUni.TextSize = 13
 tabUni.Parent = tabsFrame
-applyCorner(tabUni, 6)
-local tabUniStroke = applyStroke(tabUni, C.divider, 1, 0)
 
 local tabFavs = Instance.new("TextButton")
-tabFavs.Size = UDim2.new(0.33, -5, 1, 0)
-tabFavs.Position = UDim2.new(0.67, 5, 0, 0)
-tabFavs.BackgroundColor3 = C.surface
+tabFavs.Size = UDim2.new(0.333, 0, 1, 0)
+tabFavs.Position = UDim2.new(0.666, 0, 0, 0)
+tabFavs.BackgroundTransparency = 1
 tabFavs.Text = "Favorites"
 tabFavs.TextColor3 = C.textMuted
 tabFavs.Font = Enum.Font.GothamSemibold
 tabFavs.TextSize = 13
 tabFavs.Parent = tabsFrame
-applyCorner(tabFavs, 6)
-local tabFavsStroke = applyStroke(tabFavs, C.divider, 1, 0)
 
 local currentTab = "Main"
 
@@ -577,48 +583,61 @@ local function populateList(filterText)
         
         if filterText == "" or anim.name:lower():find(filterText) then
             local btn = Instance.new("TextButton")
-            btn.Size = UDim2.new(1, -10, 0, 36)
-            btn.BackgroundColor3 = C.surface
-            btn.Text = "        " .. anim.name
+            btn.Size = UDim2.new(1, -10, 0, 42)
+            btn.BackgroundColor3 = C.bgCard
+            btn.Text = "           " .. anim.name
             btn.TextXAlignment = Enum.TextXAlignment.Left
             btn.TextColor3 = C.text
-            btn.Font = Enum.Font.Gotham
+            btn.Font = Enum.Font.GothamSemibold
             btn.TextSize = 13
             btn.AutoButtonColor = false
             btn.Parent = scrollFrame
-            applyCorner(btn, 6)
+            applyCorner(btn, 8)
+            local stroke = applyStroke(btn, C.divider, 1, 0)
+            
+            local activeDot = Instance.new("Frame")
+            activeDot.Size = UDim2.new(0, 4, 0, 20)
+            activeDot.Position = UDim2.new(0, 10, 0.5, -10)
+            activeDot.BackgroundColor3 = C.accent
+            activeDot.BorderSizePixel = 0
+            activeDot.BackgroundTransparency = (activeAnim == anim.name) and 0 or 1
+            activeDot.Parent = btn
+            applyCorner(activeDot, 2)
+            
+            if activeAnim == anim.name then
+                btn.BackgroundColor3 = C.surfaceHover
+                stroke.Color = C.accent
+                stroke.Transparency = 0.5
+            end
             
             -- Star Icon
             local starBtn = Instance.new("TextButton")
             starBtn.Size = UDim2.new(0, 30, 1, 0)
-            starBtn.Position = UDim2.new(0, 0, 0, 0)
+            starBtn.Position = UDim2.new(0, 20, 0, 0)
             starBtn.BackgroundTransparency = 1
             starBtn.Text = isFav and "★" or "☆"
             starBtn.TextColor3 = isFav and C.accent or C.textMuted
-            starBtn.TextSize = 18
+            starBtn.TextSize = 16
             starBtn.Font = Enum.Font.GothamBold
             starBtn.Parent = btn
             
             starBtn.MouseButton1Click:Connect(function()
                 if savedConfig.favs[anim.name] then
                     savedConfig.favs[anim.name] = nil
-                    starBtn.Text = "☆"
-                    starBtn.TextColor3 = C.textMuted
                 else
                     savedConfig.favs[anim.name] = true
-                    starBtn.Text = "★"
-                    starBtn.TextColor3 = C.accent
                 end
                 saveConfig()
-                if currentTab == "Favorites" then
-                    populateList(searchBox.Text)
+                if currentTab == "Favorites" then populateList(searchBox.Text) else
+                    starBtn.Text = savedConfig.favs[anim.name] and "★" or "☆"
+                    starBtn.TextColor3 = savedConfig.favs[anim.name] and C.accent or C.textMuted
                 end
             end)
             
             -- Keybind Button
             local bindBtn = Instance.new("TextButton")
             bindBtn.Size = UDim2.new(0, 80, 0, 24)
-            bindBtn.Position = UDim2.new(1, -85, 0.5, -12)
+            bindBtn.Position = UDim2.new(1, -90, 0.5, -12)
             bindBtn.BackgroundColor3 = C.input
             local boundKey = savedConfig.binds[anim.name]
             bindBtn.Text = boundKey and ("[" .. boundKey .. "]") or "[...]"
@@ -635,16 +654,23 @@ local function populateList(filterText)
                 bindBtn.TextColor3 = C.textMuted
             end)
             
-            btn.MouseEnter:Connect(function() tween(btn, {BackgroundColor3 = C.surfaceHover}) end)
-            btn.MouseLeave:Connect(function() tween(btn, {BackgroundColor3 = C.surface}) end)
+            btn.MouseEnter:Connect(function() 
+                if activeAnim ~= anim.name then tween(btn, {BackgroundColor3 = C.surface}) end
+            end)
+            btn.MouseLeave:Connect(function() 
+                if activeAnim ~= anim.name then tween(btn, {BackgroundColor3 = C.bgCard}) end
+            end)
             
             btn.MouseButton1Click:Connect(function()
-                tween(btn, {BackgroundColor3 = C.accent, TextColor3 = C.bgCard}, 0.1)
+                if activeAnim ~= anim.name then
+                    tween(btn, {BackgroundColor3 = C.accent, TextColor3 = C.bgCard}, 0.1)
+                end
                 task.delay(0.15, function()
-                    tween(btn, {BackgroundColor3 = C.surfaceHover, TextColor3 = C.text}, 0.2)
+                    if activeAnim ~= anim.name then tween(btn, {BackgroundColor3 = C.surfaceHover, TextColor3 = C.text}, 0.2) end
                 end)
-                
                 toggleAnimation(anim.name, anim.path)
+                task.wait(0.15)
+                populateList(searchBox.Text)
             end)
             
             table.insert(animButtons, btn)
@@ -663,15 +689,28 @@ end)
 local function updateTabsUI(selectedTab)
     currentTab = selectedTab
     
-    local function setTab(tab, stroke, isActive)
-        tween(tab, {BackgroundColor3 = isActive and C.surfaceHover or C.surface}, 0.2)
-        tween(stroke, {Color = isActive and C.accent or C.divider}, 0.2)
-        tab.TextColor3 = isActive and C.text or C.textMuted
+    local posScale = 0
+    local posOffset = 4
+    if selectedTab == "Main" then
+        posScale = 0
+        posOffset = 4
+        tween(tabMain, {TextColor3 = C.text}, 0.2)
+        tween(tabUni, {TextColor3 = C.textMuted}, 0.2)
+        tween(tabFavs, {TextColor3 = C.textMuted}, 0.2)
+    elseif selectedTab == "Unicorns" then
+        posScale = 0.333
+        posOffset = 2
+        tween(tabMain, {TextColor3 = C.textMuted}, 0.2)
+        tween(tabUni, {TextColor3 = C.text}, 0.2)
+        tween(tabFavs, {TextColor3 = C.textMuted}, 0.2)
+    else
+        posScale = 0.666
+        posOffset = 0
+        tween(tabMain, {TextColor3 = C.textMuted}, 0.2)
+        tween(tabUni, {TextColor3 = C.textMuted}, 0.2)
+        tween(tabFavs, {TextColor3 = C.text}, 0.2)
     end
-
-    setTab(tabMain, tabMainStroke, selectedTab == "Main")
-    setTab(tabUni, tabUniStroke, selectedTab == "Unicorns")
-    setTab(tabFavs, tabFavsStroke, selectedTab == "Favorites")
+    tween(tabIndicator, {Position = UDim2.new(posScale, posOffset, 0, 4)}, 0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.Out)
     
     populateList(searchBox.Text)
 end
