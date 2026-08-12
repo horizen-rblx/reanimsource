@@ -265,7 +265,8 @@ API.reanimate = function(bool, remote, args)
 		local player_gui = player:FindFirstChildWhichIsA("PlayerGui");
 		if player_gui then
 			for _, gui in player_gui:GetChildren() do
-				if gui:IsA("ScreenGui") and gui.ResetOnSpawn then
+				if gui:IsA("ScreenGui") then
+					saved_gui_states[gui] = gui.ResetOnSpawn;
 					gui.ResetOnSpawn = false;
 				end;
 			end;
@@ -273,13 +274,16 @@ API.reanimate = function(bool, remote, args)
 		player.Character = cloned_char;
 		cloned_char:WaitForChild("Animate").Disabled = true;
 		cloned_char:WaitForChild("Animate").Disabled = false;
-		if player_gui then
-			for _, gui in player_gui:GetChildren() do
-				if gui:IsA("ScreenGui") and not gui.ResetOnSpawn then
-					gui.ResetOnSpawn = true;
+		task.spawn(function()
+			task.wait();
+			if player_gui then
+				for gui, state in pairs(saved_gui_states) do
+					if gui and gui.Parent then
+						gui.ResetOnSpawn = state;
+					end;
 				end;
 			end;
-		end;
+		end);
 		zen.connections.hb = zen.services.run_service.Heartbeat:Connect(function()
 			if not real_char or not real_char.Parent or not cloned_char or not cloned_char.Parent then
 				API.reanimate(false, remote, args);
@@ -356,7 +360,8 @@ API.reanimate = function(bool, remote, args)
 			local player_gui = player:FindFirstChildWhichIsA("PlayerGui");
 			if player_gui then
 				for _, gui in player_gui:GetChildren() do
-					if gui:IsA("ScreenGui") and gui.ResetOnSpawn then
+					if gui:IsA("ScreenGui") then
+						saved_gui_states[gui] = gui.ResetOnSpawn;
 						gui.ResetOnSpawn = false;
 					end;
 				end;
@@ -376,13 +381,16 @@ API.reanimate = function(bool, remote, args)
 				task.wait();
 				animate_script.Disabled = false;
 			end;
-			if player_gui then
-				for _, gui in player_gui:GetChildren() do
-					if gui:IsA("ScreenGui") and not gui.ResetOnSpawn then
-						gui.ResetOnSpawn = true;
+			task.spawn(function()
+				task.wait();
+				if player_gui then
+					for gui, state in pairs(saved_gui_states) do
+						if gui and gui.Parent then
+							gui.ResetOnSpawn = state;
+						end;
 					end;
 				end;
-			end;
+			end);
 		end;
 		zen.flags.reanimated = false;
 	end;
