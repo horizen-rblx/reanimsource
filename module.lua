@@ -46,15 +46,18 @@ local get_game_ragdoll_info = function(enable)
 	local place_id = game.PlaceId;
 	if place_id == 15546218972 or place_id == 6884319169 then
 		-- Mic Up and Mic Up 18+
-		local remote = zen.services.replicated:WaitForChild("event_rag");
+		local remote = zen.services.replicated:WaitForChild("event_rag", 3);
+		if not remote then return nil, nil, false end
 		return remote, {"Ball"}, false;
 	elseif place_id == 5991163185 then
 		-- Spray Paint
-		local remote = zen.services.replicated.Remotes.Physics.Ragdoll;
+		local remote = zen.services.replicated:FindFirstChild("Remotes") and zen.services.replicated.Remotes:FindFirstChild("Physics") and zen.services.replicated.Remotes.Physics:FindFirstChild("Ragdoll");
+		if not remote then return nil, nil, false end
 		return remote, {}, false;
 	elseif place_id == 5683833663 then
 		-- Ragdoll Engine (uses LocalEvent, not RemoteEvent)
-		local local_event = zen.services.replicated:WaitForChild("LocalRagdollEvent");
+		local local_event = zen.services.replicated:WaitForChild("LocalRagdollEvent", 3);
+		if not local_event then return nil, nil, false end
 		return local_event, {enable}, true;
 	end;
 	return nil, nil, false;
@@ -138,7 +141,10 @@ local clone_char = function(model)
     end
 	new_clone.Name = "Reanimation";
 	new_clone.Parent = zen.services.workspace;
-	new_clone:WaitForChild("Animate").Disabled = true;
+	local animate_script = new_clone:FindFirstChild("Animate");
+	if animate_script then
+		animate_script.Disabled = true;
+	end;
     new_clone.Humanoid.RequiresNeck = false;
     new_clone.Humanoid.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None;
 	if new_clone:FindFirstChildWhichIsA("ForceField") then
@@ -275,8 +281,11 @@ API.reanimate = function(bool, remote, args)
 			end;
 		end;
 		player.Character = cloned_char;
-		cloned_char:WaitForChild("Animate").Disabled = true;
-		cloned_char:WaitForChild("Animate").Disabled = false;
+		local animate_script = cloned_char:FindFirstChild("Animate");
+		if animate_script then
+			animate_script.Disabled = true;
+			animate_script.Disabled = false;
+		end;
 		task.spawn(function()
 			task.wait();
 			if player_gui then
