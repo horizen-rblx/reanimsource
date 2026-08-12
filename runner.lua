@@ -9,17 +9,17 @@ local TweenService = game:GetService("TweenService")
 -- ZEN THEME PALETTE
 -- ═══════════════════════════════════════════════════
 local C = {
-    bg              = Color3.fromRGB(8, 8, 8),
-    bgCard          = Color3.fromRGB(14, 14, 14),
-    surface         = Color3.fromRGB(20, 20, 20),
-    surfaceHover    = Color3.fromRGB(28, 28, 28),
-    input           = Color3.fromRGB(24, 24, 24),
-    accent          = Color3.fromRGB(245, 190, 75),
-    danger          = Color3.fromRGB(230, 70, 70),
-    success         = Color3.fromRGB(80, 220, 140),
-    text            = Color3.fromRGB(220, 220, 228),
-    textMuted       = Color3.fromRGB(100, 100, 115),
-    divider         = Color3.fromRGB(35, 35, 45)
+    bg              = Color3.fromRGB(0, 0, 0),       -- Pure black
+    bgCard          = Color3.fromRGB(10, 10, 10),    -- Deep dark grey
+    surface         = Color3.fromRGB(16, 16, 16),    -- Surface grey
+    surfaceHover    = Color3.fromRGB(26, 26, 26),    -- Hover grey
+    input           = Color3.fromRGB(12, 12, 12),    -- Input background
+    accent          = Color3.fromRGB(255, 255, 255), -- Pure white accent
+    danger          = Color3.fromRGB(50, 50, 50),    -- Muted dark grey for danger buttons
+    success         = Color3.fromRGB(255, 255, 255), -- White for success state
+    text            = Color3.fromRGB(240, 240, 240), -- Clean white text
+    textMuted       = Color3.fromRGB(130, 130, 130), -- Muted grey text
+    divider         = Color3.fromRGB(28, 28, 28)     -- Subtle borders
 }
 
 local function applyCorner(parent, radius)
@@ -185,7 +185,7 @@ applyCorner(closeBtn, 6)
 local minBtn = Instance.new("TextButton")
 minBtn.Size = UDim2.new(0, 12, 0, 12)
 minBtn.Position = UDim2.new(0, 35, 0.5, -6)
-minBtn.BackgroundColor3 = C.accent
+minBtn.BackgroundColor3 = C.danger
 minBtn.Text = ""
 minBtn.AutoButtonColor = false
 minBtn.Parent = titleBar
@@ -221,8 +221,8 @@ applyCorner(toggleBtn, 6)
 applyStroke(toggleBtn, C.divider, 1, 0)
 
 local isMinimized = false
-minBtn.MouseEnter:Connect(function() tween(minBtn, {BackgroundColor3 = Color3.fromRGB(255, 230, 140)}, 0.15) end)
-minBtn.MouseLeave:Connect(function() tween(minBtn, {BackgroundColor3 = C.accent}, 0.15) end)
+minBtn.MouseEnter:Connect(function() tween(minBtn, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, 0.15) end)
+minBtn.MouseLeave:Connect(function() tween(minBtn, {BackgroundColor3 = C.danger}, 0.15) end)
 minBtn.MouseButton1Click:Connect(function()
     isMinimized = not isMinimized
     if isMinimized then
@@ -232,7 +232,7 @@ minBtn.MouseButton1Click:Connect(function()
     end
 end)
 
-closeBtn.MouseEnter:Connect(function() tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(255, 100, 100)}, 0.15) end)
+closeBtn.MouseEnter:Connect(function() tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(255, 255, 255)}, 0.15) end)
 closeBtn.MouseLeave:Connect(function() tween(closeBtn, {BackgroundColor3 = C.danger}, 0.15) end)
 closeBtn.MouseButton1Click:Connect(function() gui:Destroy() end)
 
