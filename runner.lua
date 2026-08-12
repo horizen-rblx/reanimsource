@@ -211,14 +211,14 @@ controlsFrame.Parent = titleBar
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(1, 0, 1, 0)
 toggleBtn.Position = UDim2.new(0, 0, 0, 0)
-toggleBtn.BackgroundColor3 = C.bgCard
+toggleBtn.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 toggleBtn.Text = "Enable Reanim"
 toggleBtn.TextColor3 = C.text
 toggleBtn.Font = Enum.Font.GothamSemibold
 toggleBtn.TextSize = 12
 toggleBtn.Parent = controlsFrame
 applyCorner(toggleBtn, 15)
-applyStroke(toggleBtn, C.divider, 1, 0)
+local toggleStroke = applyStroke(toggleBtn, C.textMuted, 1, 0.5)
 
 local isMinimized = false
 minBtn.MouseEnter:Connect(function() tween(minBtn, {BackgroundColor3 = Color3.fromRGB(255, 220, 100)}, 0.15) end)
@@ -509,9 +509,11 @@ local function setReanimState(state)
     if state then
         toggleBtn.Text = "Disable Reanim"
         tween(toggleBtn, {BackgroundColor3 = C.text, TextColor3 = C.bg}, 0.2)
+        tween(toggleStroke, {Color = C.text, Transparency = 0}, 0.2)
     else
         toggleBtn.Text = "Enable Reanim"
-        tween(toggleBtn, {BackgroundColor3 = C.bgCard, TextColor3 = C.text}, 0.2)
+        tween(toggleBtn, {BackgroundColor3 = Color3.fromRGB(30, 30, 30), TextColor3 = C.text}, 0.2)
+        tween(toggleStroke, {Color = C.textMuted, Transparency = 0.5}, 0.2)
     end
 end
 
@@ -724,16 +726,18 @@ populateList("")
 -- Button Actions
 toggleBtn.MouseEnter:Connect(function()
     if api.is_reanimated() then
-        tween(toggleBtn, {BackgroundColor3 = C.textMuted})
+        tween(toggleBtn, {BackgroundColor3 = Color3.fromRGB(200, 200, 200)})
     else
-        tween(toggleBtn, {BackgroundColor3 = C.surfaceHover})
+        tween(toggleBtn, {BackgroundColor3 = Color3.fromRGB(50, 50, 50)})
+        tween(toggleStroke, {Color = C.text, Transparency = 0.3}, 0.2)
     end
 end)
 toggleBtn.MouseLeave:Connect(function()
     if api.is_reanimated() then
         tween(toggleBtn, {BackgroundColor3 = C.text})
     else
-        tween(toggleBtn, {BackgroundColor3 = C.bgCard})
+        tween(toggleBtn, {BackgroundColor3 = Color3.fromRGB(30, 30, 30)})
+        tween(toggleStroke, {Color = C.textMuted, Transparency = 0.5}, 0.2)
     end
 end)
 
