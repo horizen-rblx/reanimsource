@@ -250,6 +250,8 @@ API.reanimate = function(bool, remote, args)
 		if not real_char:FindFirstChild("Humanoid") then
 			return "Real character is missing a Humanoid.";
 		end;
+		real_char.Humanoid.RequiresNeck = false;
+		real_char.Humanoid.BreakJointsOnDeath = false;
 		local real_hrp = real_char:FindFirstChild("HumanoidRootPart")
 		if not real_hrp then
 			return "Real character is missing a HumanoidRootPart, cannot reanimate.";
@@ -262,6 +264,7 @@ API.reanimate = function(bool, remote, args)
 		end;
 		zen.clones[player] = cloned_char;
 		set_model_transparency(cloned_char, 1);
+		local saved_gui_states = {};
 		local player_gui = player:FindFirstChildWhichIsA("PlayerGui");
 		if player_gui then
 			for _, gui in player_gui:GetChildren() do
@@ -357,6 +360,7 @@ API.reanimate = function(bool, remote, args)
 			if hrp then
 				hrp.Transparency = 1;
 			end;
+			local saved_gui_states = {};
 			local player_gui = player:FindFirstChildWhichIsA("PlayerGui");
 			if player_gui then
 				for _, gui in player_gui:GetChildren() do
