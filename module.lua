@@ -46,7 +46,7 @@ local get_game_ragdoll_info = function(enable)
 	local place_id = game.PlaceId;
 	if place_id == 15546218972 or place_id == 6884319169 then
 		-- Mic Up and Mic Up 18+
-		local remote = zen.services.replicated:WaitForChild("event_rag", 3);
+		local remote = zen.services.replicated:FindFirstChild("event_rag");
 		if not remote then return nil, nil, false end
 		return remote, {"Ball"}, false;
 	elseif place_id == 5991163185 then
@@ -56,7 +56,7 @@ local get_game_ragdoll_info = function(enable)
 		return remote, {}, false;
 	elseif place_id == 5683833663 then
 		-- Ragdoll Engine (uses LocalEvent, not RemoteEvent)
-		local local_event = zen.services.replicated:WaitForChild("LocalRagdollEvent", 3);
+		local local_event = zen.services.replicated:FindFirstChild("LocalRagdollEvent");
 		if not local_event then return nil, nil, false end
 		return local_event, {enable}, true;
 	end;
@@ -107,6 +107,11 @@ local clone_char = function(model)
     end
 
 	local new_clone = model:Clone();
+	for _, desc in ipairs(new_clone:GetDescendants()) do
+		if desc:IsA("BillboardGui") or desc:IsA("SurfaceGui") or desc:IsA("Highlight") or desc:IsA("ParticleEmitter") then
+			desc:Destroy()
+		end
+	end
     
     -- Manually reconstruct any missing Motor6Ds (bypasses games that break Clone())
     for _, desc in ipairs(model:GetDescendants()) do
@@ -233,6 +238,21 @@ API.reanimate = function(bool, remote, args)
 	if bool ~= true and bool ~= false then
 		return ("bad argument #1 to 'reanimate' (boolean expected, got %s)"):format(typeof(bool));
 	end;
+	if zen.flags.is_processing then
+		return "Busy processing reanimation request, please wait.";
+	end;
+	zen.flags.is_processing = true;
+	local success, result = pcall(function()
+		return API._reanimate_internal(bool, remote, args)
+	end)
+	zen.flags.is_processing = false;
+	if not success then
+		return "Reanimation error: " .. tostring(result);
+	end
+	return result;
+end;
+
+API._reanimate_internal = function(bool, remote, args)
 	local player = get_local_player();
 	if typeof(player) == "string" then return player end;
 
@@ -281,6 +301,9 @@ API.reanimate = function(bool, remote, args)
 			end;
 		end;
 		player.Character = cloned_char;
+		if workspace.CurrentCamera and cloned_char:FindFirstChild("Humanoid") then
+			workspace.CurrentCamera.CameraSubject = cloned_char.Humanoid;
+		end
 		local animate_script = cloned_char:FindFirstChild("Animate");
 		if animate_script then
 			animate_script.Disabled = true;
@@ -380,6 +403,9 @@ API.reanimate = function(bool, remote, args)
 				end;
 			end;
 			player.Character = real_char;
+			if workspace.CurrentCamera and real_char:FindFirstChild("Humanoid") then
+				workspace.CurrentCamera.CameraSubject = real_char.Humanoid;
+			end
 
             local animator = real_char:FindFirstChild("Humanoid") and real_char.Humanoid:FindFirstChild("Animator");
             if animator then
