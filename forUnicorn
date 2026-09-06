@@ -683,7 +683,7 @@ libHeaderDiv.BackgroundColor3 = C.divider
 libHeaderDiv.BorderSizePixel = 0
 libHeaderDiv.Parent = libraryPanel
 
--- Category Filter Tabs Strip (Sleeker Tabs UI!)
+-- Category Filter Tabs Strip (2 Clean Tabs: ALL and CUSTOM)
 local libTabsStrip = Instance.new("Frame")
 libTabsStrip.Name = "CategoryTabs"
 libTabsStrip.Size = UDim2.new(1, -20, 0, 24)
@@ -694,36 +694,35 @@ libTabsStrip.Parent = libraryPanel
 local activeCategoryFilter = "All"
 local populateMediaLibrary -- Forward declaration
 
-local function createCategoryTab(label, filterKey, posX, width)
-    local tab = Instance.new("TextButton")
-    tab.Size = UDim2.new(0, width, 1, 0)
-    tab.Position = UDim2.new(0, posX, 0, 0)
-    tab.BackgroundColor3 = (activeCategoryFilter == filterKey) and Color3.fromRGB(50, 18, 42) or C.bg2
-    tab.Text = label
-    tab.TextColor3 = (activeCategoryFilter == filterKey) and C.accentSoft or C.text3
-    tab.Font = Enum.Font.GothamBold
-    tab.TextSize = 9
-    tab.Parent = libTabsStrip
-    applyCorner(tab, 4)
-    local stroke = applyStroke(tab, (activeCategoryFilter == filterKey) and C.glassBorder or C.border, 1, 0.4)
+local tabBtnAll = Instance.new("TextButton")
+tabBtnAll.Size = UDim2.new(0.5, -3, 1, 0)
+tabBtnAll.Position = UDim2.new(0, 0, 0, 0)
+tabBtnAll.BackgroundColor3 = Color3.fromRGB(50, 18, 42)
+tabBtnAll.Text = "ALL"
+tabBtnAll.TextColor3 = C.accentSoft
+tabBtnAll.Font = Enum.Font.GothamBold
+tabBtnAll.TextSize = 9
+tabBtnAll.Parent = libTabsStrip
+applyCorner(tabBtnAll, 4)
+local tabStrokeAll = applyStroke(tabBtnAll, C.glassBorder, 1, 0.4)
 
-    return tab, stroke
-end
-
-local tabBtnAll, tabStrokeAll = createCategoryTab("ALL", "All", 0, 68)
-local tabBtnUnicorn, tabStrokeUnicorn = createCategoryTab("UNICORN", "Unicorns", 72, 80)
-local tabBtnCustom, tabStrokeCustom = createCategoryTab("CUSTOM", "Custom", 156, 70)
+local tabBtnCustom = Instance.new("TextButton")
+tabBtnCustom.Size = UDim2.new(0.5, -3, 1, 0)
+tabBtnCustom.Position = UDim2.new(0.5, 3, 0, 0)
+tabBtnCustom.BackgroundColor3 = C.bg2
+tabBtnCustom.Text = "CUSTOM"
+tabBtnCustom.TextColor3 = C.text3
+tabBtnCustom.Font = Enum.Font.GothamBold
+tabBtnCustom.TextSize = 9
+tabBtnCustom.Parent = libTabsStrip
+applyCorner(tabBtnCustom, 4)
+local tabStrokeCustom = applyStroke(tabBtnCustom, C.border, 1, 0.5)
 
 local function updateCategoryTabsUI()
     local isAll = (activeCategoryFilter == "All")
     tabBtnAll.BackgroundColor3 = isAll and Color3.fromRGB(50, 18, 42) or C.bg2
     tabBtnAll.TextColor3 = isAll and C.accentSoft or C.text3
     tabStrokeAll.Color = isAll and C.glassBorder or C.border
-
-    local isUni = (activeCategoryFilter == "Unicorns")
-    tabBtnUnicorn.BackgroundColor3 = isUni and Color3.fromRGB(50, 18, 42) or C.bg2
-    tabBtnUnicorn.TextColor3 = isUni and C.accentSoft or C.text3
-    tabStrokeUnicorn.Color = isUni and C.glassBorder or C.border
 
     local isCus = (activeCategoryFilter == "Custom")
     tabBtnCustom.BackgroundColor3 = isCus and Color3.fromRGB(50, 18, 42) or C.bg2
@@ -754,12 +753,6 @@ libSearchPad.Parent = libSearch
 -- Tab click connections
 tabBtnAll.MouseButton1Click:Connect(function()
     activeCategoryFilter = "All"
-    updateCategoryTabsUI()
-    if populateMediaLibrary then populateMediaLibrary(libSearch.Text) end
-end)
-
-tabBtnUnicorn.MouseButton1Click:Connect(function()
-    activeCategoryFilter = "Unicorns"
     updateCategoryTabsUI()
     if populateMediaLibrary then populateMediaLibrary(libSearch.Text) end
 end)
@@ -1245,38 +1238,71 @@ local transitionPresetList = {
 }
 
 -- ------------------------------------------------------------------
--- [BOTTOM DOCK] TIMELINE SEQUENCER & TRANSPORT BAR
+-- [BOTTOM DOCK] ULTRA-SLEEK TIMELINE SEQUENCER & TRANSPORT DECK
 -- ------------------------------------------------------------------
 local timelineSection = Instance.new("Frame")
 timelineSection.Name = "TimelineBottomPanel"
-timelineSection.Size = UDim2.new(1, -24, 0, 134)
-timelineSection.Position = UDim2.new(0, 12, 1, -142)
-timelineSection.BackgroundColor3 = C.bg0
+timelineSection.Size = UDim2.new(1, -24, 0, 130)
+timelineSection.Position = UDim2.new(0, 12, 1, -138)
+timelineSection.BackgroundColor3 = Color3.fromRGB(10, 10, 14)
+timelineSection.BackgroundTransparency = 0.05
 timelineSection.BorderSizePixel = 0
 timelineSection.ClipsDescendants = true
 timelineSection.Active = true
 timelineSection.Parent = mainFrame
-applyCorner(timelineSection, 8)
-applyStroke(timelineSection, C.glassBorder, 1, 0.4)
+applyCorner(timelineSection, 10)
+applyStroke(timelineSection, C.glassBorder, 1.2, 0.4)
 
--- TOP STRIP OF BOTTOM DOCK: Transport Buttons + Reanim / Export
+-- TOP CONTROL DECK: 3-Way Symmetrical Modern Studio Strip (Height: 34px)
 local bottomTopStrip = Instance.new("Frame")
 bottomTopStrip.Size = UDim2.new(1, 0, 0, 34)
 bottomTopStrip.Position = UDim2.new(0, 0, 0, 0)
-bottomTopStrip.BackgroundColor3 = C.bg1
+bottomTopStrip.BackgroundColor3 = Color3.fromRGB(14, 14, 20)
 bottomTopStrip.BorderSizePixel = 0
 bottomTopStrip.Parent = timelineSection
 applyStroke(bottomTopStrip, C.divider, 1, 0)
 
--- Left Side: Hardware Transport Controls
+-- 1. LEFT ZONE: Timecode Readout Capsule & Status
+local topLeftDeck = Instance.new("Frame")
+topLeftDeck.Size = UDim2.new(0, 180, 0, 26)
+topLeftDeck.Position = UDim2.new(0, 10, 0.5, -13)
+topLeftDeck.BackgroundTransparency = 1
+topLeftDeck.Parent = bottomTopStrip
+
+local timecodeLabel = Instance.new("TextLabel")
+timecodeLabel.Size = UDim2.new(0, 80, 0, 24)
+timecodeLabel.Position = UDim2.new(0, 0, 0.5, -12)
+timecodeLabel.BackgroundColor3 = Color3.fromRGB(8, 8, 12)
+timecodeLabel.Text = "00:00.00"
+timecodeLabel.TextColor3 = C.accentSoft
+timecodeLabel.Font = Enum.Font.Code
+timecodeLabel.TextSize = 10
+timecodeLabel.Parent = topLeftDeck
+applyCorner(timecodeLabel, 4)
+applyStroke(timecodeLabel, C.divider, 1, 0)
+
+local fpsBadge = Instance.new("TextLabel")
+fpsBadge.Size = UDim2.new(0, 70, 0, 24)
+fpsBadge.Position = UDim2.new(0, 86, 0.5, -12)
+fpsBadge.BackgroundTransparency = 1
+fpsBadge.Text = "30 FPS // LIVE"
+fpsBadge.TextColor3 = C.textMuted
+fpsBadge.Font = Enum.Font.Code
+fpsBadge.TextSize = 8
+fpsBadge.TextXAlignment = Enum.TextXAlignment.Left
+fpsBadge.Parent = topLeftDeck
+
+-- 2. CENTER ZONE: Centered Hardware Transport Controls Deck
 local transportFrame = Instance.new("Frame")
-transportFrame.Size = UDim2.new(0, 310, 0, 26)
-transportFrame.Position = UDim2.new(0, 8, 0.5, -13)
+transportFrame.Size = UDim2.new(0, 264, 0, 26)
+transportFrame.AnchorPoint = Vector2.new(0.5, 0.5)
+transportFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
 transportFrame.BackgroundTransparency = 1
 transportFrame.Parent = bottomTopStrip
 
 local transportLayout = Instance.new("UIListLayout")
 transportLayout.FillDirection = Enum.FillDirection.Horizontal
+transportLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 transportLayout.VerticalAlignment = Enum.VerticalAlignment.Center
 transportLayout.Padding = UDim.new(0, 4)
 transportLayout.Parent = transportFrame
@@ -1297,30 +1323,20 @@ end
 
 local btnRewind = createTransportBtn("|<", 24, "Rewind to Start")
 local btnStepBack = createTransportBtn("<", 22, "Step -1 Frame")
-local btnPlay = createTransportBtn("PLAY", 52, "Play / Pause")
-btnPlay.BackgroundColor3 = C.bg3
+local btnPlay = createTransportBtn("PLAY", 56, "Play / Pause")
+btnPlay.BackgroundColor3 = Color3.fromRGB(24, 48, 32)
 btnPlay.TextColor3 = C.green
+applyStroke(btnPlay, Color3.fromRGB(40, 120, 60), 1, 0.5)
 local btnStepFwd = createTransportBtn(">", 22, "Step +1 Frame")
 local btnStop = createTransportBtn("STOP", 38, "Stop")
 local btnLoop = createTransportBtn("LOOP", 42, "Toggle Looping")
 btnLoop.TextColor3 = C.green
 
--- Timecode Readout
-local timecodeLabel = Instance.new("TextLabel")
-timecodeLabel.Size = UDim2.new(0, 72, 0, 22)
-timecodeLabel.BackgroundColor3 = C.bg0
-timecodeLabel.Text = "00:00.00"
-timecodeLabel.TextColor3 = C.accentSoft
-timecodeLabel.Font = Enum.Font.Code
-timecodeLabel.TextSize = 10
-timecodeLabel.Parent = transportFrame
-applyCorner(timecodeLabel, 4)
-applyStroke(timecodeLabel, C.divider, 1, 0)
-
--- Right Side: Reanim Toggle + Export Buttons
+-- 3. RIGHT ZONE: Actions Island (Enable Reanim & Merge/Export)
 local topRightFrame = Instance.new("Frame")
 topRightFrame.Size = UDim2.new(0, 236, 0, 26)
-topRightFrame.Position = UDim2.new(1, -244, 0.5, -13)
+topRightFrame.AnchorPoint = Vector2.new(1, 0.5)
+topRightFrame.Position = UDim2.new(1, -8, 0.5, 0)
 topRightFrame.BackgroundTransparency = 1
 topRightFrame.Parent = bottomTopStrip
 
@@ -1384,23 +1400,23 @@ updateReanimButton()
 local btnExport = Instance.new("TextButton")
 btnExport.Size = UDim2.new(0, 118, 0, 24)
 btnExport.Position = UDim2.new(0, 114, 0.5, -12)
-btnExport.BackgroundColor3 = C.bg2
+btnExport.BackgroundColor3 = Color3.fromRGB(45, 18, 38)
 btnExport.Text = "MERGE & EXPORT"
-btnExport.TextColor3 = C.accent
+btnExport.TextColor3 = C.accentSoft
 btnExport.Font = Enum.Font.GothamBold
 btnExport.TextSize = 9
 btnExport.Parent = topRightFrame
 applyCorner(btnExport, 5)
-applyStroke(btnExport, C.glassBorder, 1, 0.5)
+applyStroke(btnExport, C.glassBorder, 1, 0.4)
 
--- LOWER ZONE: MULTI-CLIP VISUAL TIMELINE TRACK (Height: 96px)
+-- LOWER ZONE: MULTI-CLIP VISUAL TIMELINE TRACK (Height: 94px)
 local timelineScroll = Instance.new("ScrollingFrame")
-timelineScroll.Size = UDim2.new(1, 0, 1, -36)
-timelineScroll.Position = UDim2.new(0, 0, 0, 36)
+timelineScroll.Size = UDim2.new(1, 0, 1, -35)
+timelineScroll.Position = UDim2.new(0, 0, 0, 35)
 timelineScroll.BackgroundTransparency = 1
 timelineScroll.BorderSizePixel = 0
 timelineScroll.ScrollBarThickness = 4
-timelineScroll.ScrollBarImageColor3 = C.border
+timelineScroll.ScrollBarImageColor3 = C.glassBorder
 timelineScroll.ScrollBarImageTransparency = 0.5
 timelineScroll.ScrollingDirection = Enum.ScrollingDirection.X
 timelineScroll.CanvasSize = UDim2.new(0, 1200, 0, 0)
@@ -1409,7 +1425,7 @@ timelineScroll.Parent = timelineSection
 -- Time Ruler (Top of Sequencer)
 local rulerContainer = Instance.new("Frame")
 rulerContainer.Size = UDim2.new(1, 0, 0, 22)
-rulerContainer.BackgroundColor3 = C.rulerBg
+rulerContainer.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 rulerContainer.BorderSizePixel = 0
 rulerContainer.Parent = timelineScroll
 applyStroke(rulerContainer, C.divider, 1, 0)
@@ -1423,10 +1439,10 @@ rulerTicksFrame.Parent = rulerContainer
 local trackLane = Instance.new("Frame")
 trackLane.Size = UDim2.new(1, 0, 0, 68)
 trackLane.Position = UDim2.new(0, 0, 0, 24)
-trackLane.BackgroundColor3 = Color3.fromRGB(13, 13, 16)
+trackLane.BackgroundColor3 = Color3.fromRGB(12, 12, 16)
 trackLane.BorderSizePixel = 0
 trackLane.Parent = timelineScroll
-applyStroke(trackLane, C.divider, 1, 0)
+applyStroke(trackLane, Color3.fromRGB(28, 28, 36), 1, 0)
 
 local clipsContainer = Instance.new("Frame")
 clipsContainer.Size = UDim2.new(1, 0, 1, 0)
@@ -1454,7 +1470,7 @@ applyCorner(playheadHandle, 3)
 local playheadTimeBubble = Instance.new("TextLabel")
 playheadTimeBubble.Size = UDim2.new(0, 54, 0, 16)
 playheadTimeBubble.Position = UDim2.new(0.5, -27, 0, -18)
-playheadTimeBubble.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+playheadTimeBubble.BackgroundColor3 = Color3.fromRGB(14, 14, 20)
 playheadTimeBubble.Text = "00:00.0"
 playheadTimeBubble.TextColor3 = C.red
 playheadTimeBubble.Font = Enum.Font.Code
@@ -1476,7 +1492,6 @@ emptyTrackLabel.TextSize = 11
 emptyTrackLabel.TextXAlignment = Enum.TextXAlignment.Left
 emptyTrackLabel.Visible = true
 emptyTrackLabel.Parent = trackLane
-
 -- ==================================================================
 -- 7. SLEEK IN / OUT HUD TOGGLE SYSTEM & KEYBIND
 -- ==================================================================
@@ -1507,7 +1522,7 @@ toggleStudioHUD = function()
             TweenService:Create(btnSlideExpandInsp, ti, {Position = UDim2.new(1, -22, 0.5, -27)}):Play()
         end
 
-        TweenService:Create(timelineSection, ti, {Position = UDim2.new(0, 12, 1, -142)}):Play()
+        TweenService:Create(timelineSection, ti, {Position = UDim2.new(0, 12, 1, -138)}):Play()
 
         task.delay(0.35, function() isTweening = false end)
     else
@@ -2200,11 +2215,9 @@ populateMediaLibrary = function(filterText)
     local count = 0
 
     for _, item in ipairs(animationCatalog) do
-        -- Category filter check
+        -- Category filter check: All vs Custom
         local catMatch = true
-        if activeCategoryFilter == "Unicorns" then
-            catMatch = (item.category == "Unicorns") or (item.name:lower():find("unicorn", 1, true) ~= nil)
-        elseif activeCategoryFilter == "Custom" then
+        if activeCategoryFilter == "Custom" then
             catMatch = item.isCustom or (item.category == "Custom")
         end
 
@@ -2220,11 +2233,12 @@ populateMediaLibrary = function(filterText)
             applyCorner(card, 5)
             applyStroke(card, C.divider, 1, 0.4)
 
-            -- Category Dot indicator
+            -- Category Dot indicator: Cyan for custom, magenta for library
+            local isItemCustom = (item.isCustom or item.category == "Custom")
             local catDot = Instance.new("Frame")
             catDot.Size = UDim2.new(0, 5, 0, 5)
             catDot.Position = UDim2.new(0, 8, 0.5, -2)
-            catDot.BackgroundColor3 = item.isCustom and Color3.fromRGB(100, 220, 255) or ((item.category == "Unicorns" or item.name:lower():find("unicorn", 1, true)) and C.accent or C.textMuted)
+            catDot.BackgroundColor3 = isItemCustom and Color3.fromRGB(100, 220, 255) or C.accent
             catDot.BorderSizePixel = 0
             catDot.Parent = card
             applyCorner(catDot, 3)
@@ -2234,7 +2248,7 @@ populateMediaLibrary = function(filterText)
             title.Position = UDim2.new(0, 18, 0, 0)
             title.BackgroundTransparency = 1
             title.Text = item.name
-            title.TextColor3 = item.isCustom and Color3.fromRGB(100, 220, 255) or C.text
+            title.TextColor3 = isItemCustom and Color3.fromRGB(100, 220, 255) or C.text
             title.Font = Enum.Font.GothamMedium
             title.TextSize = 10
             title.TextXAlignment = Enum.TextXAlignment.Left
