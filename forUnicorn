@@ -19,36 +19,50 @@ if CoreGui:FindFirstChild("ZenStudioTimelineEditor") then
 end
 
 -- ══════════════════════════════════════════════════════════════════
--- 1. DESIGN PALETTE (Zen Studio Video Editor Theme)
+-- 1. DESIGN PALETTE (Reanim 1.8 Sleek Studio Theme)
 -- ══════════════════════════════════════════════════════════════════
 local C = {
-    bg          = Color3.fromRGB(10, 10, 12),       -- Studio main background
-    topBar      = Color3.fromRGB(14, 14, 17),       -- Dark transport header
-    panelBg     = Color3.fromRGB(16, 16, 20),       -- Side & inspector panels
-    surface     = Color3.fromRGB(22, 22, 28),       -- Card & button surface
-    surfaceHover= Color3.fromRGB(32, 32, 40),       -- Hover state
-    input       = Color3.fromRGB(12, 12, 16),       -- Input boxes
-    border      = Color3.fromRGB(36, 36, 44),       -- Panel strokes
-    divider     = Color3.fromRGB(26, 26, 32),       -- Subtle inner borders
-    accent      = Color3.fromRGB(255, 255, 255),    -- White accent
-    accentBlue  = Color3.fromRGB(70, 140, 255),     -- Studio blue
-    green       = Color3.fromRGB(60, 210, 120),     -- Play & export green
-    red         = Color3.fromRGB(255, 70, 85),      -- Playhead red
-    danger      = Color3.fromRGB(240, 60, 80),      -- Delete red
-    text        = Color3.fromRGB(240, 240, 245),    -- Primary text
-    textMuted   = Color3.fromRGB(130, 130, 145),    -- Secondary text
-    trackBg     = Color3.fromRGB(13, 13, 16),       -- Sequencer track background
-    rulerBg     = Color3.fromRGB(18, 18, 23),       -- Time ruler background
+    -- Reanim 1.8 Core Palette
+    bg0         = Color3.fromRGB(8, 8, 8),        -- Main frame background (near black)
+    bg1         = Color3.fromRGB(15, 15, 15),     -- Header and cards background
+    bg2         = Color3.fromRGB(25, 25, 25),     -- Playable lists / list elements
+    bg3         = Color3.fromRGB(35, 35, 35),     -- Speed inputs / sliders background
+    bg4         = Color3.fromRGB(20, 20, 20),     -- Toggle backgrounds
+    border      = Color3.fromRGB(45, 45, 45),     -- Subtle outlines
+    glassBorder = Color3.fromRGB(217, 73, 160),   -- Signature Reanim 1.8 magenta
+    accent      = Color3.fromRGB(217, 73, 160),   -- Main accent (magenta)
+    accentSoft  = Color3.fromRGB(240, 95, 175),   -- Soft glowing accent
+    text        = Color3.fromRGB(255, 255, 255),  -- White body text
+    text2       = Color3.fromRGB(220, 205, 215),  -- Soft light body text
+    text3       = Color3.fromRGB(160, 140, 150),  -- Dim secondary text
+    red         = Color3.fromRGB(255, 70, 70),    -- Close dot / danger
+    yellow      = Color3.fromRGB(255, 190, 40),   -- Minimize dot / warning
+    green       = Color3.fromRGB(40, 220, 120),   -- Success / active green
+    white       = Color3.fromRGB(255, 255, 255),  -- Pure white
+    trackBg     = Color3.fromRGB(10, 10, 10),     -- Sequencer track background
+    rulerBg     = Color3.fromRGB(14, 14, 14),     -- Time ruler background
+
+    -- Mapped aliases for ultra-sleek coherence across all editor frames
+    bg          = Color3.fromRGB(8, 8, 8),
+    topBar      = Color3.fromRGB(15, 15, 15),
+    panelBg     = Color3.fromRGB(12, 12, 12),
+    surface     = Color3.fromRGB(22, 22, 22),
+    surfaceHover= Color3.fromRGB(32, 32, 32),
+    input       = Color3.fromRGB(16, 16, 16),
+    divider     = Color3.fromRGB(35, 35, 35),
+    accentBlue  = Color3.fromRGB(217, 73, 160),   -- Harmonized with Reanim 1.8 accent
+    danger      = Color3.fromRGB(255, 70, 70),
+    textMuted   = Color3.fromRGB(160, 140, 150),
 }
 
--- Clip palette colors for distinguishing sequential track blocks
+-- Clip palette colors for distinguishing sequential track blocks (sleek dark jewel tones)
 local CLIP_COLORS = {
-    Color3.fromRGB(30, 75, 145),    -- Sapphire Blue
-    Color3.fromRGB(25, 110, 75),    -- Emerald Green
-    Color3.fromRGB(120, 50, 135),   -- Amethyst Purple
-    Color3.fromRGB(145, 80, 25),    -- Amber Bronze
-    Color3.fromRGB(135, 40, 60),    -- Crimson Ruby
-    Color3.fromRGB(40, 105, 125),   -- Deep Cyan
+    Color3.fromRGB(42, 20, 38),     -- Deep magenta-plum
+    Color3.fromRGB(18, 28, 44),     -- Deep midnight navy
+    Color3.fromRGB(18, 38, 28),     -- Deep forest emerald
+    Color3.fromRGB(44, 28, 16),     -- Deep bronze amber
+    Color3.fromRGB(40, 16, 24),     -- Deep wine ruby
+    Color3.fromRGB(20, 34, 38),     -- Deep slate cyan
 }
 
 local function applyCorner(parent, radius)
@@ -498,23 +512,23 @@ local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainStudioFrame"
 mainFrame.Size = UDim2.new(0, 880, 0, 550)
 mainFrame.Position = UDim2.new(0.5, -440, 0.5, -275)
-mainFrame.BackgroundColor3 = C.bg
+mainFrame.BackgroundColor3 = C.bg0
 mainFrame.BorderSizePixel = 0
 mainFrame.ClipsDescendants = true
 mainFrame.Active = true
 mainFrame.Parent = screenGui
 applyCorner(mainFrame, 10)
-applyStroke(mainFrame, C.border, 1.5, 0)
+applyStroke(mainFrame, C.glassBorder, 1.5, 0.5)
 
 -- ══════════════════════════════════════════════════════════════════
 -- 6. TOP TRANSPORT & CONTROL BAR
 -- ══════════════════════════════════════════════════════════════════
 local topBar = Instance.new("Frame")
 topBar.Size = UDim2.new(1, 0, 0, 46)
-topBar.BackgroundColor3 = C.topBar
+topBar.BackgroundColor3 = C.bg1
 topBar.BorderSizePixel = 0
 topBar.Parent = mainFrame
-applyStroke(topBar, C.divider, 1, 0)
+applyStroke(topBar, C.border, 1, 0.6)
 
 -- Draggable title bar
 local isDragging, dragStart, startPos = false, nil, nil
@@ -539,40 +553,42 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- Studio Brand Title
+-- Studio Brand Title (Sleek Reanim 1.8 Typography & Accent Underline)
 local titleContainer = Instance.new("Frame")
-titleContainer.Size = UDim2.new(0, 190, 1, 0)
+titleContainer.Size = UDim2.new(0, 180, 1, 0)
 titleContainer.BackgroundTransparency = 1
 titleContainer.Position = UDim2.new(0, 14, 0, 0)
 titleContainer.Parent = topBar
 
-local studioIcon = Instance.new("TextLabel")
-studioIcon.Size = UDim2.new(0, 24, 1, 0)
-studioIcon.BackgroundTransparency = 1
-studioIcon.Text = "🎞"
-studioIcon.Font = Enum.Font.GothamBold
-studioIcon.TextSize = 16
-studioIcon.Parent = titleContainer
-
 local studioTitle = Instance.new("TextLabel")
-studioTitle.Size = UDim2.new(1, -30, 1, 0)
-studioTitle.Position = UDim2.new(0, 28, 0, 0)
+studioTitle.Size = UDim2.new(1, 0, 1, -4)
+studioTitle.Position = UDim2.new(0, 0, 0, 0)
 studioTitle.BackgroundTransparency = 1
 studioTitle.Text = "ZEN STUDIO // TIMELINE"
-studioTitle.TextColor3 = C.text
+studioTitle.TextColor3 = C.accent
 studioTitle.Font = Enum.Font.GothamBold
 studioTitle.TextSize = 11
 studioTitle.TextXAlignment = Enum.TextXAlignment.Left
 studioTitle.Parent = titleContainer
 
--- Transport Controls Container (Centered)
+-- Signature Reanim 1.8 magenta accent underline
+local titleDiv = Instance.new("Frame")
+titleDiv.Parent = titleContainer
+titleDiv.BackgroundColor3 = C.glassBorder
+titleDiv.BackgroundTransparency = 0.3
+titleDiv.BorderSizePixel = 0
+titleDiv.Position = UDim2.new(0, 0, 1, -6)
+titleDiv.Size = UDim2.new(0, 75, 0, 2)
+titleDiv.ZIndex = 33
+
+-- Transport Controls Container (Centered, Hardware-Inspired)
 local transportFrame = Instance.new("Frame")
-transportFrame.Size = UDim2.new(0, 335, 0, 32)
-transportFrame.Position = UDim2.new(0.5, -168, 0.5, -16)
-transportFrame.BackgroundColor3 = C.surface
+transportFrame.Size = UDim2.new(0, 315, 0, 30)
+transportFrame.Position = UDim2.new(0.5, -158, 0.5, -15)
+transportFrame.BackgroundColor3 = C.bg2
 transportFrame.Parent = topBar
 applyCorner(transportFrame, 6)
-applyStroke(transportFrame, C.divider, 1, 0)
+applyStroke(transportFrame, C.border, 1, 0.6)
 
 local transportLayout = Instance.new("UIListLayout")
 transportLayout.FillDirection = Enum.FillDirection.Horizontal
@@ -583,77 +599,77 @@ transportLayout.Parent = transportFrame
 
 local function createTransportBtn(text, sizeW, tooltip)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, sizeW or 26, 0, 24)
-    btn.BackgroundColor3 = C.input
+    btn.Size = UDim2.new(0, sizeW or 26, 0, 22)
+    btn.BackgroundColor3 = C.bg3
     btn.Text = text
-    btn.TextColor3 = C.text
+    btn.TextColor3 = C.text2
     btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 11
+    btn.TextSize = 10
     btn.Parent = transportFrame
     applyCorner(btn, 4)
-    applyStroke(btn, C.divider, 1, 0.3)
+    applyStroke(btn, C.border, 1, 0.5)
     return btn
 end
 
-local btnRewind = createTransportBtn("⏮", 24, "Rewind to Start")
-local btnStepBack = createTransportBtn("◀", 24, "Step -1 Frame")
-local btnPlay = createTransportBtn("▶ PLAY", 60, "Play / Pause")
-btnPlay.BackgroundColor3 = Color3.fromRGB(30, 60, 40)
+local btnRewind = createTransportBtn("|<", 24, "Rewind to Start")
+local btnStepBack = createTransportBtn("<", 22, "Step -1 Frame")
+local btnPlay = createTransportBtn("PLAY", 52, "Play / Pause")
+btnPlay.BackgroundColor3 = C.bg3
 btnPlay.TextColor3 = C.green
-local btnStepFwd = createTransportBtn("▶", 24, "Step +1 Frame")
-local btnStop = createTransportBtn("⏹", 24, "Stop")
-local btnLoop = createTransportBtn("🔁 LOOP", 54, "Toggle Looping")
+local btnStepFwd = createTransportBtn(">", 22, "Step +1 Frame")
+local btnStop = createTransportBtn("STOP", 38, "Stop")
+local btnLoop = createTransportBtn("LOOP", 42, "Toggle Looping")
 btnLoop.TextColor3 = C.green
 
 -- Timecode Readout
 local timecodeLabel = Instance.new("TextLabel")
-timecodeLabel.Size = UDim2.new(0, 85, 0, 24)
-timecodeLabel.BackgroundColor3 = C.input
+timecodeLabel.Size = UDim2.new(0, 75, 0, 22)
+timecodeLabel.BackgroundColor3 = C.bg0
 timecodeLabel.Text = "00:00.00"
-timecodeLabel.TextColor3 = C.accentBlue
+timecodeLabel.TextColor3 = C.accentSoft
 timecodeLabel.Font = Enum.Font.Code
 timecodeLabel.TextSize = 10
 timecodeLabel.Parent = transportFrame
 applyCorner(timecodeLabel, 4)
-applyStroke(timecodeLabel, C.divider, 1, 0.5)
+applyStroke(timecodeLabel, C.border, 1, 0.6)
 
--- Top Right Action Buttons: Enable Reanim + Merge & Export + Window Controls
+-- Top Right Action Buttons: Enable Reanim + Merge & Export + Reanim 1.8 Window Controls
 local topRightFrame = Instance.new("Frame")
-topRightFrame.Size = UDim2.new(0, 280, 1, 0)
-topRightFrame.Position = UDim2.new(1, -285, 0, 0)
+topRightFrame.Size = UDim2.new(0, 295, 1, 0)
+topRightFrame.Position = UDim2.new(1, -300, 0, 0)
 topRightFrame.BackgroundTransparency = 1
 topRightFrame.Parent = topBar
 
 local btnToggleReanim = Instance.new("TextButton")
-btnToggleReanim.Size = UDim2.new(0, 115, 0, 28)
-btnToggleReanim.Position = UDim2.new(0, 0, 0.5, -14)
-btnToggleReanim.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
-btnToggleReanim.Text = "⚡ Enable Reanim"
-btnToggleReanim.TextColor3 = C.text
+btnToggleReanim.Size = UDim2.new(0, 105, 0, 26)
+btnToggleReanim.Position = UDim2.new(0, 0, 0.5, -13)
+btnToggleReanim.BackgroundColor3 = C.bg2
+btnToggleReanim.Text = "ENABLE REANIM"
+btnToggleReanim.TextColor3 = C.text2
 btnToggleReanim.Font = Enum.Font.GothamBold
-btnToggleReanim.TextSize = 10
+btnToggleReanim.TextSize = 9
 btnToggleReanim.Parent = topRightFrame
-applyCorner(btnToggleReanim, 6)
-local reanimStroke = applyStroke(btnToggleReanim, C.border, 1, 0.4)
+applyCorner(btnToggleReanim, 5)
+local reanimStroke = applyStroke(btnToggleReanim, C.border, 1, 0.6)
 
 local function updateReanimButton()
     local isRean = api and api.is_reanimated and api.is_reanimated()
     if isRean then
-        btnToggleReanim.Text = "⚡ Reanimated"
+        btnToggleReanim.Text = "REANIMATED"
         btnToggleReanim.TextColor3 = C.green
-        btnToggleReanim.BackgroundColor3 = Color3.fromRGB(20, 48, 28)
-        reanimStroke.Color = Color3.fromRGB(50, 140, 70)
+        btnToggleReanim.BackgroundColor3 = Color3.fromRGB(15, 35, 20)
+        reanimStroke.Color = Color3.fromRGB(40, 120, 60)
     else
-        btnToggleReanim.Text = "⚡ Enable Reanim"
-        btnToggleReanim.TextColor3 = C.text
-        btnToggleReanim.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+        btnToggleReanim.Text = "ENABLE REANIM"
+        btnToggleReanim.TextColor3 = C.text2
+        btnToggleReanim.BackgroundColor3 = C.bg2
         reanimStroke.Color = C.border
     end
 end
 
 btnToggleReanim.MouseButton1Click:Connect(function()
     if not (api and api.reanimate) then
-        btnToggleReanim.Text = "Module Not Loaded"
+        btnToggleReanim.Text = "MODULE OFFLINE"
         task.delay(1.5, updateReanimButton)
         return
     end
@@ -661,8 +677,8 @@ btnToggleReanim.MouseButton1Click:Connect(function()
     local isRean = api.is_reanimated and api.is_reanimated()
     local newState = not isRean
 
-    btnToggleReanim.Text = newState and "Reanimating..." or "Disabling..."
-    btnToggleReanim.TextColor3 = C.textMuted
+    btnToggleReanim.Text = newState and "REANIMATING..." or "DISABLING..."
+    btnToggleReanim.TextColor3 = C.text3
 
     task.spawn(function()
         local err = api.reanimate(newState)
@@ -682,29 +698,43 @@ end)
 updateReanimButton()
 
 local btnExport = Instance.new("TextButton")
-btnExport.Size = UDim2.new(0, 120, 0, 28)
-btnExport.Position = UDim2.new(0, 122, 0.5, -14)
-btnExport.BackgroundColor3 = Color3.fromRGB(24, 45, 32)
-btnExport.Text = "🎬 Merge & Export"
-btnExport.TextColor3 = C.green
+btnExport.Size = UDim2.new(0, 115, 0, 26)
+btnExport.Position = UDim2.new(0, 112, 0.5, -13)
+btnExport.BackgroundColor3 = C.bg2
+btnExport.Text = "MERGE & EXPORT"
+btnExport.TextColor3 = C.accent
 btnExport.Font = Enum.Font.GothamBold
-btnExport.TextSize = 10
+btnExport.TextSize = 9
 btnExport.Parent = topRightFrame
-applyCorner(btnExport, 6)
-applyStroke(btnExport, Color3.fromRGB(40, 110, 60), 1, 0.2)
+applyCorner(btnExport, 5)
+applyStroke(btnExport, C.glassBorder, 1, 0.5)
 
-local btnClose = Instance.new("TextButton")
-btnClose.Size = UDim2.new(0, 26, 0, 26)
-btnClose.Position = UDim2.new(1, -28, 0.5, -13)
-btnClose.BackgroundColor3 = C.surface
-btnClose.Text = "✕"
-btnClose.TextColor3 = C.textMuted
-btnClose.Font = Enum.Font.GothamBold
-btnClose.TextSize = 11
-btnClose.Parent = topRightFrame
-applyCorner(btnClose, 13)
+-- Reanim 1.8 Window Controls (Yellow Minimize Dot + Red Close Dot)
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Name = "MinimizeBtn"
+minimizeBtn.BackgroundColor3 = C.yellow
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.AnchorPoint = Vector2.new(1, 0.5)
+minimizeBtn.Position = UDim2.new(1, -24, 0.5, 0)
+minimizeBtn.Size = UDim2.new(0, 14, 0, 14)
+minimizeBtn.Text = ""
+minimizeBtn.AutoButtonColor = false
+minimizeBtn.Parent = topRightFrame
+applyCorner(minimizeBtn, 7)
 
-btnClose.MouseButton1Click:Connect(function()
+local closeBtn = Instance.new("TextButton")
+closeBtn.Name = "CloseBtn"
+closeBtn.BackgroundColor3 = C.red
+closeBtn.BorderSizePixel = 0
+closeBtn.AnchorPoint = Vector2.new(1, 0.5)
+closeBtn.Position = UDim2.new(1, -4, 0.5, 0)
+closeBtn.Size = UDim2.new(0, 14, 0, 14)
+closeBtn.Text = ""
+closeBtn.AutoButtonColor = false
+closeBtn.Parent = topRightFrame
+applyCorner(closeBtn, 7)
+
+closeBtn.MouseButton1Click:Connect(function()
     Timeline.isPlaying = false
     Timeline.isHoldingPose = false
     if Timeline.playbackConn then
@@ -736,6 +766,26 @@ workspaceArea.Position = UDim2.new(0, 0, 0, 46)
 workspaceArea.BackgroundTransparency = 1
 workspaceArea.Parent = mainFrame
 
+local isStudioMinimized = false
+local STUDIO_FULL_SIZE = UDim2.new(0, 880, 0, 550)
+local STUDIO_MINI_SIZE = UDim2.new(0, 880, 0, 46)
+
+minimizeBtn.MouseButton1Click:Connect(function()
+    isStudioMinimized = not isStudioMinimized
+    local ti = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    if isStudioMinimized then
+        workspaceArea.Visible = false
+        TweenService:Create(mainFrame, ti, {Size = STUDIO_MINI_SIZE}):Play()
+    else
+        TweenService:Create(mainFrame, ti, {Size = STUDIO_FULL_SIZE}):Play()
+        task.delay(0.22, function()
+            if not isStudioMinimized then
+                workspaceArea.Visible = true
+            end
+        end)
+    end
+end)
+
 -- LEFT PANEL: ANIMATION MEDIA LIBRARY (Width: 260px)
 local libraryPanel = Instance.new("Frame")
 libraryPanel.Size = UDim2.new(0, 260, 1, 0)
@@ -749,7 +799,7 @@ libHeader.Size = UDim2.new(1, -24, 0, 28)
 libHeader.Position = UDim2.new(0, 12, 0, 8)
 libHeader.BackgroundTransparency = 1
 libHeader.Text = "MEDIA LIBRARY"
-libHeader.TextColor3 = C.textMuted
+libHeader.TextColor3 = C.accentSoft
 libHeader.Font = Enum.Font.GothamBold
 libHeader.TextSize = 10
 libHeader.TextXAlignment = Enum.TextXAlignment.Left
@@ -796,9 +846,9 @@ libLayout.Parent = libScroll
 local btnImportCustom = Instance.new("TextButton")
 btnImportCustom.Size = UDim2.new(1, -24, 0, 28)
 btnImportCustom.Position = UDim2.new(0, 12, 1, -34)
-btnImportCustom.BackgroundColor3 = C.surface
+btnImportCustom.BackgroundColor3 = C.bg2
 btnImportCustom.Text = "+ Import Custom Script"
-btnImportCustom.TextColor3 = C.accentBlue
+btnImportCustom.TextColor3 = C.accent
 btnImportCustom.Font = Enum.Font.GothamBold
 btnImportCustom.TextSize = 10
 btnImportCustom.Parent = libraryPanel
@@ -825,7 +875,7 @@ inspHeader.Size = UDim2.new(1, -24, 0, 24)
 inspHeader.Position = UDim2.new(0, 14, 0, 6)
 inspHeader.BackgroundTransparency = 1
 inspHeader.Text = "CLIP INSPECTOR // TRIM, SPEED & TRANSITIONS"
-inspHeader.TextColor3 = C.textMuted
+inspHeader.TextColor3 = C.accentSoft
 inspHeader.Font = Enum.Font.GothamBold
 inspHeader.TextSize = 10
 inspHeader.TextXAlignment = Enum.TextXAlignment.Left
@@ -867,7 +917,7 @@ inspDurationSummary.Size = UDim2.new(0.4, 0, 0, 18)
 inspDurationSummary.Position = UDim2.new(0.6, 0, 0, 0)
 inspDurationSummary.BackgroundTransparency = 1
 inspDurationSummary.Text = "Length: 0.00s"
-inspDurationSummary.TextColor3 = C.accentBlue
+inspDurationSummary.TextColor3 = C.accentSoft
 inspDurationSummary.Font = Enum.Font.GothamMedium
 inspDurationSummary.TextSize = 11
 inspDurationSummary.TextXAlignment = Enum.TextXAlignment.Right
@@ -983,7 +1033,7 @@ transLabel.Size = UDim2.new(0, 110, 0, 22)
 transLabel.Position = UDim2.new(0, 0, 0, 98)
 transLabel.BackgroundTransparency = 1
 transLabel.Text = "Transition In:"
-transLabel.TextColor3 = Color3.fromRGB(200, 160, 255)
+transLabel.TextColor3 = C.accentSoft
 transLabel.Font = Enum.Font.GothamBold
 transLabel.TextSize = 10
 transLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -1015,14 +1065,14 @@ transLayout.Parent = transBtnsContainer
 local transDurationBox = Instance.new("TextBox")
 transDurationBox.Size = UDim2.new(0, 58, 0, 22)
 transDurationBox.Position = UDim2.new(1, -58, 0, 98)
-transDurationBox.BackgroundColor3 = Color3.fromRGB(25, 20, 35)
+transDurationBox.BackgroundColor3 = C.bg3
 transDurationBox.Text = "0.22s"
-transDurationBox.TextColor3 = Color3.fromRGB(220, 170, 255)
+transDurationBox.TextColor3 = C.text
 transDurationBox.Font = Enum.Font.Code
 transDurationBox.TextSize = 10
 transDurationBox.Parent = inspContent
 applyCorner(transDurationBox, 4)
-applyStroke(transDurationBox, Color3.fromRGB(120, 60, 190), 1, 0.4)
+applyStroke(transDurationBox, C.glassBorder, 1, 0.5)
 
 local transitionPresetList = {
     { key = "None", label = "Cut" },
@@ -1042,7 +1092,7 @@ clipActionsRow.Parent = inspContent
 local btnMoveLeft = Instance.new("TextButton")
 btnMoveLeft.Size = UDim2.new(0, 85, 1, 0)
 btnMoveLeft.BackgroundColor3 = C.surface
-btnMoveLeft.Text = "◀ Move Earlier"
+btnMoveLeft.Text = "Move Earlier"
 btnMoveLeft.TextColor3 = C.text
 btnMoveLeft.Font = Enum.Font.GothamMedium
 btnMoveLeft.TextSize = 9
@@ -1054,7 +1104,7 @@ local btnMoveRight = Instance.new("TextButton")
 btnMoveRight.Size = UDim2.new(0, 85, 1, 0)
 btnMoveRight.Position = UDim2.new(0, 92, 0, 0)
 btnMoveRight.BackgroundColor3 = C.surface
-btnMoveRight.Text = "Move Later ▶"
+btnMoveRight.Text = "Move Later"
 btnMoveRight.TextColor3 = C.text
 btnMoveRight.Font = Enum.Font.GothamMedium
 btnMoveRight.TextSize = 9
@@ -1078,7 +1128,7 @@ local btnDeleteClip = Instance.new("TextButton")
 btnDeleteClip.Size = UDim2.new(0, 75, 1, 0)
 btnDeleteClip.Position = UDim2.new(1, -75, 0, 0)
 btnDeleteClip.BackgroundColor3 = Color3.fromRGB(40, 18, 22)
-btnDeleteClip.Text = "🗑 Delete"
+btnDeleteClip.Text = "Delete"
 btnDeleteClip.TextColor3 = C.danger
 btnDeleteClip.Font = Enum.Font.GothamBold
 btnDeleteClip.TextSize = 9
@@ -1234,7 +1284,7 @@ local function stopPlayback()
         Timeline.playbackConn:Disconnect()
         Timeline.playbackConn = nil
     end
-    btnPlay.Text = "▶ PLAY"
+    btnPlay.Text = "PLAY"
     btnPlay.TextColor3 = C.green
     btnPlay.BackgroundColor3 = Color3.fromRGB(30, 60, 40)
 end
@@ -1271,7 +1321,7 @@ local function startPlayback()
         Timeline.startOffset = 0
     end
 
-    btnPlay.Text = "⏸ PAUSE"
+    btnPlay.Text = "PAUSE"
     btnPlay.TextColor3 = Color3.fromRGB(255, 200, 80)
     btnPlay.BackgroundColor3 = Color3.fromRGB(60, 45, 20)
 
@@ -1452,34 +1502,26 @@ function renderTimelineTrack()
                 local transOverlay = Instance.new("Frame")
                 transOverlay.Size = UDim2.new(0, transZoneW, 1, 0)
                 transOverlay.Position = UDim2.new(0, 0, 0, 0)
-                transOverlay.BackgroundColor3 = Color3.fromRGB(160, 90, 240)
-                transOverlay.BackgroundTransparency = 0.82
+                transOverlay.BackgroundColor3 = C.glassBorder
+                transOverlay.BackgroundTransparency = 0.85
                 transOverlay.BorderSizePixel = 0
                 transOverlay.Parent = clipCard
                 applyCorner(transOverlay, 5)
 
-                local transIcon = Instance.new("TextLabel")
-                transIcon.Size = UDim2.new(0, 16, 0, 12)
-                transIcon.Position = UDim2.new(0, 4, 1, -14)
-                transIcon.BackgroundTransparency = 1
-                transIcon.Text = "⧖"
-                transIcon.TextColor3 = Color3.fromRGB(200, 150, 255)
-                transIcon.Font = Enum.Font.GothamBold
-                transIcon.TextSize = 9
-                transIcon.Parent = clipCard
+                -- Transition seam indicator (sleek badge only)
 
                 local transBadge = Instance.new("TextButton")
                 transBadge.Size = UDim2.new(0, 46, 0, 16)
                 transBadge.Position = UDim2.new(0, posX - 23, 0, 2)
-                transBadge.BackgroundColor3 = Color3.fromRGB(24, 16, 36)
-                transBadge.Text = string.format("⧖ %.2fs", trDur)
-                transBadge.TextColor3 = Color3.fromRGB(215, 160, 255)
+                transBadge.BackgroundColor3 = C.bg2
+                transBadge.Text = string.format("%.2fs", trDur)
+                transBadge.TextColor3 = C.accentSoft
                 transBadge.Font = Enum.Font.Code
                 transBadge.TextSize = 8
                 transBadge.ZIndex = 25
                 transBadge.Parent = clipsContainer
                 applyCorner(transBadge, 8)
-                applyStroke(transBadge, Color3.fromRGB(140, 70, 230), 1, 0.3)
+                applyStroke(transBadge, C.glassBorder, 1, 0.4)
 
                 transBadge.MouseButton1Click:Connect(function()
                     Timeline.selectedClipIndex = idx
@@ -1534,9 +1576,10 @@ function updateInspectorUI()
     for _, spd in ipairs(speedOptions) do
         local sBtn = Instance.new("TextButton")
         sBtn.Size = UDim2.new(0, 38, 1, 0)
-        sBtn.BackgroundColor3 = (clip.speed == spd) and C.accentBlue or C.surface
+        sBtn.BackgroundColor3 = (clip.speed == spd) and C.accent or C.bg2
         sBtn.Text = tostring(spd) .. "x"
-        sBtn.TextColor3 = (clip.speed == spd) and Color3.fromRGB(255, 255, 255) or C.textMuted
+        sBtn.TextColor3 = (clip.speed == spd) and C.white or C.text3
+        applyStroke(sBtn, (clip.speed == spd) and C.glassBorder or C.border, 1, 0.5)
         sBtn.Font = Enum.Font.GothamBold
         sBtn.TextSize = 9
         sBtn.Parent = speedBtnsContainer
@@ -1578,17 +1621,17 @@ function updateInspectorUI()
             tBtn.Size = UDim2.new(0, 0, 1, 0)
             tBtn.AutomaticSize = Enum.AutomaticSize.X
             local isSel = (clip.transition.mode == opt.key)
-            tBtn.BackgroundColor3 = isSel and Color3.fromRGB(60, 30, 95) or C.surface
+            tBtn.BackgroundColor3 = isSel and Color3.fromRGB(55, 20, 48) or C.bg2
             tBtn.Text = " " .. opt.label .. " "
-            tBtn.TextColor3 = isSel and Color3.fromRGB(220, 160, 255) or C.textMuted
+            tBtn.TextColor3 = isSel and C.accentSoft or C.text3
             tBtn.Font = Enum.Font.GothamBold
             tBtn.TextSize = 9
             tBtn.Parent = transBtnsContainer
             applyCorner(tBtn, 4)
             if isSel then
-                applyStroke(tBtn, Color3.fromRGB(160, 80, 240), 1, 0.2)
+                applyStroke(tBtn, C.glassBorder, 1, 0.3)
             else
-                applyStroke(tBtn, C.divider, 1, 0.4)
+                applyStroke(tBtn, C.border, 1, 0.5)
             end
 
             tBtn.MouseButton1Click:Connect(function()
@@ -1807,14 +1850,14 @@ local function populateMediaLibrary(filterText)
             local btnAdd = Instance.new("TextButton")
             btnAdd.Size = UDim2.new(0, 58, 0, 24)
             btnAdd.Position = UDim2.new(1, -64, 0.5, -12)
-            btnAdd.BackgroundColor3 = Color3.fromRGB(22, 38, 55)
+            btnAdd.BackgroundColor3 = C.bg3
             btnAdd.Text = "+ Track"
-            btnAdd.TextColor3 = C.accentBlue
+            btnAdd.TextColor3 = C.accentSoft
             btnAdd.Font = Enum.Font.GothamBold
             btnAdd.TextSize = 10
             btnAdd.Parent = card
             applyCorner(btnAdd, 4)
-            applyStroke(btnAdd, Color3.fromRGB(40, 80, 130), 1, 0.3)
+            applyStroke(btnAdd, C.glassBorder, 1, 0.5)
 
             btnAdd.MouseButton1Click:Connect(function()
                 btnAdd.Text = "..."
@@ -1885,18 +1928,18 @@ importModal.Parent = mainFrame
 local importCard = Instance.new("Frame")
 importCard.Size = UDim2.new(0, 420, 0, 360)
 importCard.Position = UDim2.new(0.5, -210, 0.5, -180)
-importCard.BackgroundColor3 = C.bg
+importCard.BackgroundColor3 = C.bg0
 importCard.ZIndex = 51
 importCard.Parent = importModal
 applyCorner(importCard, 8)
-applyStroke(importCard, C.border, 1.5, 0)
+applyStroke(importCard, C.glassBorder, 1.5, 0.4)
 
 local importTitle = Instance.new("TextLabel")
 importTitle.Size = UDim2.new(1, -50, 0, 34)
 importTitle.Position = UDim2.new(0, 14, 0, 6)
 importTitle.BackgroundTransparency = 1
 importTitle.Text = "Import Animation into Library"
-importTitle.TextColor3 = C.text
+importTitle.TextColor3 = C.accent
 importTitle.Font = Enum.Font.GothamBold
 importTitle.TextSize = 12
 importTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -1907,7 +1950,8 @@ local importCloseBtn = Instance.new("TextButton")
 importCloseBtn.Size = UDim2.new(0, 24, 0, 24)
 importCloseBtn.Position = UDim2.new(1, -34, 0, 10)
 importCloseBtn.BackgroundColor3 = C.surface
-importCloseBtn.Text = "✕"
+importCloseBtn.Text = ""
+importCloseBtn.BackgroundColor3 = C.red
 importCloseBtn.TextColor3 = C.textMuted
 importCloseBtn.Font = Enum.Font.GothamBold
 importCloseBtn.TextSize = 11
@@ -2054,18 +2098,18 @@ exportModal.Parent = mainFrame
 local exportCard = Instance.new("Frame")
 exportCard.Size = UDim2.new(0, 440, 0, 320)
 exportCard.Position = UDim2.new(0.5, -220, 0.5, -160)
-exportCard.BackgroundColor3 = C.bg
+exportCard.BackgroundColor3 = C.bg0
 exportCard.ZIndex = 61
 exportCard.Parent = exportModal
 applyCorner(exportCard, 8)
-applyStroke(exportCard, C.border, 1.5, 0)
+applyStroke(exportCard, C.glassBorder, 1.5, 0.4)
 
 local exportTitle = Instance.new("TextLabel")
 exportTitle.Size = UDim2.new(1, -50, 0, 34)
 exportTitle.Position = UDim2.new(0, 16, 0, 8)
 exportTitle.BackgroundTransparency = 1
 exportTitle.Text = "Merge & Export Timeline"
-exportTitle.TextColor3 = C.text
+exportTitle.TextColor3 = C.accent
 exportTitle.Font = Enum.Font.GothamBold
 exportTitle.TextSize = 13
 exportTitle.TextXAlignment = Enum.TextXAlignment.Left
@@ -2076,7 +2120,8 @@ local exportCloseBtn = Instance.new("TextButton")
 exportCloseBtn.Size = UDim2.new(0, 24, 0, 24)
 exportCloseBtn.Position = UDim2.new(1, -34, 0, 12)
 exportCloseBtn.BackgroundColor3 = C.surface
-exportCloseBtn.Text = "✕"
+exportCloseBtn.Text = ""
+exportCloseBtn.BackgroundColor3 = C.red
 exportCloseBtn.TextColor3 = C.textMuted
 exportCloseBtn.Font = Enum.Font.GothamBold
 exportCloseBtn.TextSize = 11
@@ -2136,21 +2181,21 @@ exportStatus.Parent = exportCard
 local btnCopyClipboard = Instance.new("TextButton")
 btnCopyClipboard.Size = UDim2.new(1, -32, 0, 34)
 btnCopyClipboard.Position = UDim2.new(0, 16, 0, 172)
-btnCopyClipboard.BackgroundColor3 = Color3.fromRGB(24, 45, 32)
-btnCopyClipboard.Text = "📋 Copy Merged Script to Clipboard"
-btnCopyClipboard.TextColor3 = C.green
+btnCopyClipboard.BackgroundColor3 = C.bg2
+btnCopyClipboard.Text = "Copy Script to Clipboard"
+btnCopyClipboard.TextColor3 = C.accent
 btnCopyClipboard.Font = Enum.Font.GothamBold
 btnCopyClipboard.TextSize = 11
 btnCopyClipboard.ZIndex = 62
 btnCopyClipboard.Parent = exportCard
 applyCorner(btnCopyClipboard, 6)
-applyStroke(btnCopyClipboard, Color3.fromRGB(40, 110, 60), 1, 0.3)
+applyStroke(btnCopyClipboard, C.glassBorder, 1, 0.4)
 
 local btnSaveDisk = Instance.new("TextButton")
 btnSaveDisk.Size = UDim2.new(0.48, -16, 0, 32)
 btnSaveDisk.Position = UDim2.new(0, 16, 0, 214)
 btnSaveDisk.BackgroundColor3 = C.surface
-btnSaveDisk.Text = "💾 Save to File"
+btnSaveDisk.Text = "Save to File"
 btnSaveDisk.TextColor3 = C.accentBlue
 btnSaveDisk.Font = Enum.Font.GothamBold
 btnSaveDisk.TextSize = 10
@@ -2163,7 +2208,7 @@ local btnTestPlay = Instance.new("TextButton")
 btnTestPlay.Size = UDim2.new(0.48, -16, 0, 32)
 btnTestPlay.Position = UDim2.new(0.52, 0, 0, 214)
 btnTestPlay.BackgroundColor3 = C.surface
-btnTestPlay.Text = "▶ Test on Avatar"
+btnTestPlay.Text = "Test on Avatar"
 btnTestPlay.TextColor3 = C.text
 btnTestPlay.Font = Enum.Font.GothamBold
 btnTestPlay.TextSize = 10
@@ -2313,12 +2358,12 @@ btnExport.MouseButton1Click:Connect(function()
     recalculateTimeline()
     if #Timeline.clips == 0 then
         btnExport.Text = "Track is empty!"
-        task.delay(1.5, function() btnExport.Text = "🎬 Merge & Export" end)
+        task.delay(1.5, function() btnExport.Text = "MERGE & EXPORT" end)
         return
     end
 
     exportModal.Visible = true
-    exportInfoLabel.Text = string.format("Total Clips: %d  •  Duration: %.2fs  •  Clips: %s",
+    exportInfoLabel.Text = string.format("Total Clips: %d | Duration: %.2fs | Clips: %s",
         #Timeline.clips,
         Timeline.totalDuration,
         Timeline.clips[1].name .. (#Timeline.clips > 1 and (" + " .. tostring(#Timeline.clips - 1) .. " more") or "")
@@ -2338,7 +2383,7 @@ btnCopyClipboard.MouseButton1Click:Connect(function()
     pcall(function()
         if setclipboard then
             setclipboard(scriptContent)
-            exportStatus.Text = "✓ Merged script copied to clipboard!"
+            exportStatus.Text = "Merged script copied to clipboard!"
             exportStatus.TextColor3 = C.green
         else
             exportStatus.Text = "Clipboard not supported on this executor."
@@ -2361,7 +2406,7 @@ btnSaveDisk.MouseButton1Click:Connect(function()
         end
         if writefile then
             writefile("ZenReanim/Merged/" .. finalName .. ".lua", scriptContent)
-            exportStatus.Text = "✓ Saved to ZenReanim/Merged/" .. finalName .. ".lua"
+            exportStatus.Text = "Saved to ZenReanim/Merged/" .. finalName .. ".lua"
             exportStatus.TextColor3 = C.green
         else
             exportStatus.Text = "File writing not supported on this executor."
@@ -2375,7 +2420,7 @@ btnTestPlay.MouseButton1Click:Connect(function()
     if not scriptContent then return end
 
     if api and api.play_animation then
-        exportStatus.Text = "▶ Playing merged sequence on avatar..."
+        exportStatus.Text = "Playing merged sequence on avatar..."
         exportStatus.TextColor3 = C.green
         api.play_animation(scriptContent, 1.0)
     else
@@ -2411,7 +2456,7 @@ btnAddCatalog.MouseButton1Click:Connect(function()
             isCustom = true
         })
         populateMediaLibrary(libSearch.Text)
-        exportStatus.Text = "✓ Added to Zen Reanimations catalog!"
+        exportStatus.Text = "Added to Zen Reanimations catalog!"
         exportStatus.TextColor3 = C.green
     end)
 end)
