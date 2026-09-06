@@ -1,0 +1,1943 @@
+-- ══════════════════════════════════════════════════════════════════
+-- ZEN STUDIO: REANIMATION TIMELINE SEQUENCER & VIDEO EDITOR
+-- A professional video-editing suite for sequencing, trimming,
+-- real-time avatar scrubbing, and merging Roblox reanimations.
+-- ══════════════════════════════════════════════════════════════════
+
+local CoreGui = game:GetService("CoreGui")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local HttpService = game:GetService("HttpService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+
+-- Clean up existing instance if already open
+if CoreGui:FindFirstChild("ZenStudioTimelineEditor") then
+    CoreGui.ZenStudioTimelineEditor:Destroy()
+end
+
+-- ══════════════════════════════════════════════════════════════════
+-- 1. DESIGN PALETTE (Zen Studio Video Editor Theme)
+-- ══════════════════════════════════════════════════════════════════
+local C = {
+    bg          = Color3.fromRGB(10, 10, 12),       -- Studio main background
+    topBar      = Color3.fromRGB(14, 14, 17),       -- Dark transport header
+    panelBg     = Color3.fromRGB(16, 16, 20),       -- Side & inspector panels
+    surface     = Color3.fromRGB(22, 22, 28),       -- Card & button surface
+    surfaceHover= Color3.fromRGB(32, 32, 40),       -- Hover state
+    input       = Color3.fromRGB(12, 12, 16),       -- Input boxes
+    border      = Color3.fromRGB(36, 36, 44),       -- Panel strokes
+    divider     = Color3.fromRGB(26, 26, 32),       -- Subtle inner borders
+    accent      = Color3.fromRGB(255, 255, 255),    -- White accent
+    accentBlue  = Color3.fromRGB(70, 140, 255),     -- Studio blue
+    green       = Color3.fromRGB(60, 210, 120),     -- Play & export green
+    red         = Color3.fromRGB(255, 70, 85),      -- Playhead red
+    danger      = Color3.fromRGB(240, 60, 80),      -- Delete red
+    text        = Color3.fromRGB(240, 240, 245),    -- Primary text
+    textMuted   = Color3.fromRGB(130, 130, 145),    -- Secondary text
+    trackBg     = Color3.fromRGB(13, 13, 16),       -- Sequencer track background
+    rulerBg     = Color3.fromRGB(18, 18, 23),       -- Time ruler background
+}
+
+-- Clip palette colors for distinguishing sequential track blocks
+local CLIP_COLORS = {
+    Color3.fromRGB(30, 75, 145),    -- Sapphire Blue
+    Color3.fromRGB(25, 110, 75),    -- Emerald Green
+    Color3.fromRGB(120, 50, 135),   -- Amethyst Purple
+    Color3.fromRGB(145, 80, 25),    -- Amber Bronze
+    Color3.fromRGB(135, 40, 60),    -- Crimson Ruby
+    Color3.fromRGB(40, 105, 125),   -- Deep Cyan
+}
+
+local function applyCorner(parent, radius)
+    local c = Instance.new("UICorner")
+    c.CornerRadius = UDim.new(0, radius or 6)
+    c.Parent = parent
+    return c
+end
+
+local function applyStroke(parent, color, thickness, transparency)
+    local s = Instance.new("UIStroke")
+    s.Color = color or C.border
+    s.Thickness = thickness or 1
+    s.Transparency = transparency or 0.5
+    s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    s.Parent = parent
+    return s
+end
+
+local function tween(obj, props, dur, style, dir)
+    local info = TweenInfo.new(dur or 0.18, style or Enum.EasingStyle.Quad, dir or Enum.EasingDirection.Out)
+    local t = TweenService:Create(obj, info, props)
+    t:Play()
+    return t
+end
+
+local function formatTime(seconds)
+    if not seconds or seconds < 0 then seconds = 0 end
+    local mins = math.floor(seconds / 60)
+    local secs = seconds % 60
+    return string.format("%02d:%05.2f", mins, secs)
+end
+
+-- ══════════════════════════════════════════════════════════════════
+-- 2. REANIMATION ENGINE CONNECTOR & AVATAR POSE ENGINE
+-- ══════════════════════════════════════════════════════════════════
+local api = nil
+local moduleSuccess, moduleRes = pcall(function()
+    if isfile and isfile("module.lua") then
+        return loadstring(readfile("module.lua"))()
+    end
+    return loadstring(game:HttpGet("https://raw.githubusercontent.com/horizen-rblx/reanimsource/main/module.lua"))()
+end)
+
+if moduleSuccess and type(moduleRes) == "table" then
+    api = moduleRes
+end
+
+-- Resolve joints in avatar (clone or character)
+local cachedJoints = {}
+local function cacheAvatarJoints()
+    table.clear(cachedJoints)
+    local targetChar = (api and api.get_clone and api.get_clone()) or player.Character
+    if not targetChar then return end
+
+    for _, desc in ipairs(targetChar:GetDescendants()) do
+        if desc:IsA("Motor6D") or desc:IsA("Weld") or desc:IsA("JointInstance") then
+            if desc.Part1 then
+                cachedJoints[desc.Part1.Name] = desc
+            else
+                cachedJoints[desc.Name] = desc
+            end
+        elseif desc:IsA("AnimationConstraint") or desc:IsA("Bone") then
+            if desc.Part1 then
+                cachedJoints[desc.Part1.Name] = desc
+            else
+                cachedJoints[desc.Name] = desc
+            end
+        end
+    end
+end
+
+-- ══════════════════════════════════════════════════════════════════
+-- 3. ANIMATION PARSER & MEDIA REPOSITORY
+-- ══════════════════════════════════════════════════════════════════
+local animationCatalog = {}
+local keyframeCache = {}
+
+local function parseKeyframes(raw)
+    if typeof(raw) == "table" then
+        if raw["Animation"] then return raw["Animation"] end
+        local k = next(raw)
+        if k and typeof(raw[k]) == "table" then return raw[k] end
+        return raw
+    end
+
+    if typeof(raw) ~= "string" then return nil end
+
+    local text = raw
+    if text:sub(1, 4) == "http" then
+        local ok, res = pcall(game.HttpGet, game, text)
+        if ok and res then text = res else return nil end
+    elseif isfile and isfile(text) then
+        local ok, res = pcall(readfile, text)
+        if ok and res then text = res end
+    end
+
+    -- Fast regex extractor for standard Roblox keyframes
+    if text:match("{Time%s*=") then
+        local frames = {}
+        for t_str, data_block in text:gmatch("{Time%s*=%s*([%d%.]+),%s*Data%s*=%s*{(.-)}}") do
+            local t_val = tonumber(t_str)
+            local frame_data = {}
+            for part, args in data_block:gmatch('%["([^"]+)"%]%s*=%s*CFrame%.new%(([^%)]+)%)') do
+                local n = {}
+                for num in args:gmatch("([^,%s]+)") do
+                    table.insert(n, tonumber(num))
+                end
+                if #n == 12 then
+                    frame_data[part] = CFrame.new(n[1], n[2], n[3], n[4], n[5], n[6], n[7], n[8], n[9], n[10], n[11], n[12])
+                end
+            end
+            table.insert(frames, { Time = t_val, Data = frame_data })
+        end
+        if #frames > 0 then
+            table.sort(frames, function(a, b) return a.Time < b.Time end)
+            return frames
+        end
+    end
+
+    -- Fallback to loadstring execution
+    local fn = loadstring(text)
+    if fn then
+        local ok, tbl = pcall(fn)
+        if ok and typeof(tbl) == "table" then
+            if tbl["Animation"] then return tbl["Animation"] end
+            local k = next(tbl)
+            if k and typeof(tbl[k]) == "table" then return tbl[k] end
+            return tbl
+        end
+    end
+
+    return nil
+end
+
+local function getKeyframesAsync(animItem, callback)
+    if keyframeCache[animItem.name] then
+        callback(keyframeCache[animItem.name])
+        return
+    end
+
+    task.spawn(function()
+        local kfs = parseKeyframes(animItem.path)
+        if kfs and #kfs > 0 then
+            keyframeCache[animItem.name] = kfs
+            callback(kfs)
+        else
+            callback(nil)
+        end
+    end)
+end
+
+-- Load animations from animations.json + saved custom animations
+local function loadCatalog()
+    table.clear(animationCatalog)
+
+    local ok, rawJson = pcall(function()
+        if isfile and isfile("animations.json") then
+            return readfile("animations.json")
+        end
+        return game:HttpGet("https://raw.githubusercontent.com/horizen-rblx/reanimsource/main/animations.json")
+    end)
+
+    if ok and rawJson then
+        local decOk, decoded = pcall(function() return HttpService:JSONDecode(rawJson) end)
+        if decOk and type(decoded) == "table" then
+            for _, item in ipairs(decoded) do
+                if item.name and item.path then
+                    table.insert(animationCatalog, {
+                        name = item.name,
+                        path = item.path,
+                        category = item.category or "Reanims"
+                    })
+                end
+            end
+        end
+    end
+
+    -- Inject custom animations from ZenReanimConfig.json
+    pcall(function()
+        if isfile and isfile("ZenReanimConfig.json") then
+            local cfg = HttpService:JSONDecode(readfile("ZenReanimConfig.json"))
+            if cfg and cfg.customAnims then
+                for _, ca in ipairs(cfg.customAnims) do
+                    table.insert(animationCatalog, {
+                        name = ca.name,
+                        path = ca.script,
+                        category = "Custom",
+                        isCustom = true
+                    })
+                end
+            end
+        end
+    end)
+
+    table.sort(animationCatalog, function(a, b) return a.name:lower() < b.name:lower() end)
+end
+
+loadCatalog()
+
+-- ══════════════════════════════════════════════════════════════════
+-- 4. TIMELINE SEQUENCER DATA MODEL
+-- ══════════════════════════════════════════════════════════════════
+local Timeline = {
+    clips = {},              -- Ordered array of clip objects
+    selectedClipIndex = nil, -- Index of clip currently inspected
+    currentTime = 0,         -- Global scrubber time (seconds)
+    totalDuration = 0,       -- Calculated total length
+    isPlaying = false,
+    isLooping = true,
+    fps = 30,
+    pixelsPerSecond = 75,    -- Horizontal timeline zoom scale
+    playbackConn = nil,
+    startTime = 0,
+    startOffset = 0,
+}
+
+local function recalculateTimeline()
+    local accumulated = 0
+    for _, clip in ipairs(Timeline.clips) do
+        local span = math.max(0.05, clip.trimEnd - clip.trimStart)
+        clip.duration = span / clip.speed
+        clip.timelineStart = accumulated
+        clip.timelineEnd = accumulated + clip.duration
+        accumulated = accumulated + clip.duration
+    end
+    Timeline.totalDuration = accumulated
+end
+
+-- Apply exact interpolated pose to avatar joints at time T
+local function evaluateAndPoseAvatar(globalTime)
+    if #Timeline.clips == 0 or Timeline.totalDuration <= 0 then return end
+    cacheAvatarJoints()
+    if not next(cachedJoints) then return end
+
+    local clampedTime = math.clamp(globalTime, 0, Timeline.totalDuration)
+
+    -- Identify active clip
+    local activeClip = nil
+    for _, clip in ipairs(Timeline.clips) do
+        if clampedTime >= clip.timelineStart and clampedTime <= clip.timelineEnd then
+            activeClip = clip
+            break
+        end
+    end
+
+    if not activeClip then
+        activeClip = Timeline.clips[#Timeline.clips]
+    end
+
+    if not (activeClip and activeClip.keyframes and #activeClip.keyframes > 0) then return end
+
+    -- Convert global timeline time to local clip keyframe time
+    local localElapsed = (clampedTime - activeClip.timelineStart) * activeClip.speed
+    local targetKeyTime = activeClip.trimStart + localElapsed
+    local kfs = activeClip.keyframes
+    local count = #kfs
+
+    -- Binary search for keyframes
+    local low, high = 1, count
+    local curIdx = 1
+    while low <= high do
+        local mid = math.floor((low + high) / 2)
+        if kfs[mid].Time <= targetKeyTime then
+            curIdx = mid
+            low = mid + 1
+        else
+            high = mid - 1
+        end
+    end
+
+    local curFrame = kfs[curIdx]
+    local nextFrame = kfs[math.min(count, curIdx + 1)] or curFrame
+
+    local span = nextFrame.Time - curFrame.Time
+    local alpha = 0
+    if span > 0.0001 then
+        alpha = math.clamp((targetKeyTime - curFrame.Time) / span, 0, 1)
+    end
+
+    -- Apply lerped poses to all matched joints
+    for boneName, poseCFrame in pairs(curFrame.Data) do
+        local joint = cachedJoints[boneName]
+        if joint then
+            local nextPose = nextFrame.Data and nextFrame.Data[boneName]
+            local targetTransform = nextPose and poseCFrame:Lerp(nextPose, alpha) or poseCFrame
+            joint.Transform = targetTransform
+        end
+    end
+end
+
+-- ══════════════════════════════════════════════════════════════════
+-- 5. ROOT GUI SETUP
+-- ══════════════════════════════════════════════════════════════════
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ZenStudioTimelineEditor"
+screenGui.ResetOnSpawn = false
+screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+pcall(function()
+    if syn and syn.protect_gui then
+        syn.protect_gui(screenGui)
+        screenGui.Parent = CoreGui
+    elseif gethui then
+        screenGui.Parent = gethui()
+    else
+        screenGui.Parent = CoreGui
+    end
+end)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Name = "MainStudioFrame"
+mainFrame.Size = UDim2.new(0, 860, 0, 540)
+mainFrame.Position = UDim2.new(0.5, -430, 0.5, -270)
+mainFrame.BackgroundColor3 = C.bg
+mainFrame.BorderSizePixel = 0
+mainFrame.ClipsDescendants = true
+mainFrame.Active = true
+mainFrame.Parent = screenGui
+applyCorner(mainFrame, 10)
+applyStroke(mainFrame, C.border, 1.5, 0)
+
+-- ══════════════════════════════════════════════════════════════════
+-- 6. TOP TRANSPORT & CONTROL BAR
+-- ══════════════════════════════════════════════════════════════════
+local topBar = Instance.new("Frame")
+topBar.Size = UDim2.new(1, 0, 0, 46)
+topBar.BackgroundColor3 = C.topBar
+topBar.BorderSizePixel = 0
+topBar.Parent = mainFrame
+applyStroke(topBar, C.divider, 1, 0)
+
+-- Draggable title bar
+local isDragging, dragStart, startPos = false, nil, nil
+topBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+topBar.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isDragging = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- Studio Brand Title
+local titleContainer = Instance.new("Frame")
+titleContainer.Size = UDim2.new(0, 230, 1, 0)
+titleContainer.BackgroundTransparency = 1
+titleContainer.Position = UDim2.new(0, 14, 0, 0)
+titleContainer.Parent = topBar
+
+local studioIcon = Instance.new("TextLabel")
+studioIcon.Size = UDim2.new(0, 24, 1, 0)
+studioIcon.BackgroundTransparency = 1
+studioIcon.Text = "🎞"
+studioIcon.Font = Enum.Font.GothamBold
+studioIcon.TextSize = 16
+studioIcon.Parent = titleContainer
+
+local studioTitle = Instance.new("TextLabel")
+studioTitle.Size = UDim2.new(1, -30, 1, 0)
+studioTitle.Position = UDim2.new(0, 28, 0, 0)
+studioTitle.BackgroundTransparency = 1
+studioTitle.Text = "ZEN STUDIO // TIMELINE"
+studioTitle.TextColor3 = C.text
+studioTitle.Font = Enum.Font.GothamBold
+studioTitle.TextSize = 12
+studioTitle.TextXAlignment = Enum.TextXAlignment.Left
+studioTitle.Parent = titleContainer
+
+-- Transport Controls Container (Centered)
+local transportFrame = Instance.new("Frame")
+transportFrame.Size = UDim2.new(0, 360, 0, 32)
+transportFrame.Position = UDim2.new(0.5, -180, 0.5, -16)
+transportFrame.BackgroundColor3 = C.surface
+transportFrame.Parent = topBar
+applyCorner(transportFrame, 6)
+applyStroke(transportFrame, C.divider, 1, 0)
+
+local transportLayout = Instance.new("UIListLayout")
+transportLayout.FillDirection = Enum.FillDirection.Horizontal
+transportLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+transportLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+transportLayout.Padding = UDim.new(0, 6)
+transportLayout.Parent = transportFrame
+
+local function createTransportBtn(text, sizeW, tooltip)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, sizeW or 28, 0, 24)
+    btn.BackgroundColor3 = C.input
+    btn.Text = text
+    btn.TextColor3 = C.text
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 11
+    btn.Parent = transportFrame
+    applyCorner(btn, 4)
+    applyStroke(btn, C.divider, 1, 0.3)
+    return btn
+end
+
+local btnRewind = createTransportBtn("⏮", 26, "Rewind to Start")
+local btnStepBack = createTransportBtn("◀", 26, "Step -1 Frame")
+local btnPlay = createTransportBtn("▶ PLAY", 64, "Play / Pause")
+btnPlay.BackgroundColor3 = Color3.fromRGB(30, 60, 40)
+btnPlay.TextColor3 = C.green
+local btnStepFwd = createTransportBtn("▶", 26, "Step +1 Frame")
+local btnStop = createTransportBtn("⏹", 26, "Stop")
+local btnLoop = createTransportBtn("🔁 LOOP", 56, "Toggle Looping")
+btnLoop.TextColor3 = C.green
+
+-- Timecode Readout
+local timecodeLabel = Instance.new("TextLabel")
+timecodeLabel.Size = UDim2.new(0, 95, 0, 24)
+timecodeLabel.BackgroundColor3 = C.input
+timecodeLabel.Text = "00:00.00"
+timecodeLabel.TextColor3 = C.accentBlue
+timecodeLabel.Font = Enum.Font.Code
+timecodeLabel.TextSize = 11
+timecodeLabel.Parent = transportFrame
+applyCorner(timecodeLabel, 4)
+applyStroke(timecodeLabel, C.divider, 1, 0.5)
+
+-- Top Right Action Buttons: Merge & Export + Window Controls
+local topRightFrame = Instance.new("Frame")
+topRightFrame.Size = UDim2.new(0, 220, 1, 0)
+topRightFrame.Position = UDim2.new(1, -225, 0, 0)
+topRightFrame.BackgroundTransparency = 1
+topRightFrame.Parent = topBar
+
+local btnExport = Instance.new("TextButton")
+btnExport.Size = UDim2.new(0, 130, 0, 28)
+btnExport.Position = UDim2.new(0, 0, 0.5, -14)
+btnExport.BackgroundColor3 = Color3.fromRGB(24, 45, 32)
+btnExport.Text = "🎬 Merge & Export"
+btnExport.TextColor3 = C.green
+btnExport.Font = Enum.Font.GothamBold
+btnExport.TextSize = 10
+btnExport.Parent = topRightFrame
+applyCorner(btnExport, 6)
+applyStroke(btnExport, Color3.fromRGB(40, 110, 60), 1, 0.2)
+
+local btnClose = Instance.new("TextButton")
+btnClose.Size = UDim2.new(0, 26, 0, 26)
+btnClose.Position = UDim2.new(1, -30, 0.5, -13)
+btnClose.BackgroundColor3 = C.surface
+btnClose.Text = "✕"
+btnClose.TextColor3 = C.textMuted
+btnClose.Font = Enum.Font.GothamBold
+btnClose.TextSize = 11
+btnClose.Parent = topRightFrame
+applyCorner(btnClose, 13)
+
+btnClose.MouseButton1Click:Connect(function()
+    if Timeline.playbackConn then
+        Timeline.playbackConn:Disconnect()
+        Timeline.playbackConn = nil
+    end
+    screenGui:Destroy()
+end)
+
+-- ══════════════════════════════════════════════════════════════════
+-- 7. TWO-COLUMN WORKSPACE: LEFT (LIBRARY) & RIGHT (SEQUENCER)
+-- ══════════════════════════════════════════════════════════════════
+local workspaceArea = Instance.new("Frame")
+workspaceArea.Size = UDim2.new(1, 0, 1, -46)
+workspaceArea.Position = UDim2.new(0, 0, 0, 46)
+workspaceArea.BackgroundTransparency = 1
+workspaceArea.Parent = mainFrame
+
+-- LEFT PANEL: ANIMATION MEDIA LIBRARY (Width: 260px)
+local libraryPanel = Instance.new("Frame")
+libraryPanel.Size = UDim2.new(0, 260, 1, 0)
+libraryPanel.BackgroundColor3 = C.panelBg
+libraryPanel.BorderSizePixel = 0
+libraryPanel.Parent = workspaceArea
+applyStroke(libraryPanel, C.divider, 1, 0)
+
+local libHeader = Instance.new("TextLabel")
+libHeader.Size = UDim2.new(1, -24, 0, 28)
+libHeader.Position = UDim2.new(0, 12, 0, 8)
+libHeader.BackgroundTransparency = 1
+libHeader.Text = "MEDIA LIBRARY"
+libHeader.TextColor3 = C.textMuted
+libHeader.Font = Enum.Font.GothamBold
+libHeader.TextSize = 10
+libHeader.TextXAlignment = Enum.TextXAlignment.Left
+libHeader.Parent = libraryPanel
+
+-- Search Box in Library
+local libSearch = Instance.new("TextBox")
+libSearch.Size = UDim2.new(1, -24, 0, 28)
+libSearch.Position = UDim2.new(0, 12, 0, 36)
+libSearch.BackgroundColor3 = C.input
+libSearch.PlaceholderText = "Search animations..."
+libSearch.PlaceholderColor3 = C.textMuted
+libSearch.Text = ""
+libSearch.TextColor3 = C.text
+libSearch.Font = Enum.Font.GothamMedium
+libSearch.TextSize = 11
+libSearch.TextXAlignment = Enum.TextXAlignment.Left
+libSearch.ClearTextOnFocus = false
+libSearch.Parent = libraryPanel
+applyCorner(libSearch, 6)
+applyStroke(libSearch, C.divider, 1, 0)
+local libSearchPad = Instance.new("UIPadding")
+libSearchPad.PaddingLeft = UDim.new(0, 8)
+libSearchPad.Parent = libSearch
+
+-- Library Scroll List
+local libScroll = Instance.new("ScrollingFrame")
+libScroll.Size = UDim2.new(1, -20, 1, -114)
+libScroll.Position = UDim2.new(0, 10, 0, 72)
+libScroll.BackgroundTransparency = 1
+libScroll.BorderSizePixel = 0
+libScroll.ScrollBarThickness = 3
+libScroll.ScrollBarImageColor3 = C.border
+libScroll.ScrollBarImageTransparency = 0.5
+libScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+libScroll.Parent = libraryPanel
+
+local libLayout = Instance.new("UIListLayout")
+libLayout.Padding = UDim.new(0, 4)
+libLayout.SortOrder = Enum.SortOrder.LayoutOrder
+libLayout.Parent = libScroll
+
+-- Bottom + Import Script button
+local btnImportCustom = Instance.new("TextButton")
+btnImportCustom.Size = UDim2.new(1, -24, 0, 28)
+btnImportCustom.Position = UDim2.new(0, 12, 1, -34)
+btnImportCustom.BackgroundColor3 = C.surface
+btnImportCustom.Text = "+ Import Custom Script"
+btnImportCustom.TextColor3 = C.accentBlue
+btnImportCustom.Font = Enum.Font.GothamBold
+btnImportCustom.TextSize = 10
+btnImportCustom.Parent = libraryPanel
+applyCorner(btnImportCustom, 6)
+applyStroke(btnImportCustom, C.divider, 1, 0.3)
+
+-- RIGHT PANEL: SEQUENCER & INSPECTOR
+local rightPanel = Instance.new("Frame")
+rightPanel.Size = UDim2.new(1, -260, 1, 0)
+rightPanel.Position = UDim2.new(0, 260, 0, 0)
+rightPanel.BackgroundTransparency = 1
+rightPanel.Parent = workspaceArea
+
+-- UPPER ZONE: CLIP INSPECTOR / CROP & TRIM CONTROLS (Height: 180px)
+local inspectorFrame = Instance.new("Frame")
+inspectorFrame.Size = UDim2.new(1, 0, 0, 180)
+inspectorFrame.BackgroundColor3 = C.panelBg
+inspectorFrame.BorderSizePixel = 0
+inspectorFrame.Parent = rightPanel
+applyStroke(inspectorFrame, C.divider, 1, 0)
+
+local inspHeader = Instance.new("TextLabel")
+inspHeader.Size = UDim2.new(1, -24, 0, 24)
+inspHeader.Position = UDim2.new(0, 14, 0, 8)
+inspHeader.BackgroundTransparency = 1
+inspHeader.Text = "CLIP INSPECTOR // TRIM & TIMING"
+inspHeader.TextColor3 = C.textMuted
+inspHeader.Font = Enum.Font.GothamBold
+inspHeader.TextSize = 10
+inspHeader.TextXAlignment = Enum.TextXAlignment.Left
+inspHeader.Parent = inspectorFrame
+
+-- Empty state label when no clip is selected
+local inspEmptyLabel = Instance.new("TextLabel")
+inspEmptyLabel.Size = UDim2.new(1, -40, 0, 60)
+inspEmptyLabel.Position = UDim2.new(0, 20, 0.5, -20)
+inspEmptyLabel.BackgroundTransparency = 1
+inspEmptyLabel.Text = "Select a clip on the timeline below to crop frames, trim timing, or adjust speed."
+inspEmptyLabel.TextColor3 = C.textMuted
+inspEmptyLabel.Font = Enum.Font.Gotham
+inspEmptyLabel.TextSize = 11
+inspEmptyLabel.Visible = true
+inspEmptyLabel.Parent = inspectorFrame
+
+-- Active Inspector Container (Visible when clip selected)
+local inspContent = Instance.new("Frame")
+inspContent.Size = UDim2.new(1, -24, 1, -36)
+inspContent.Position = UDim2.new(0, 12, 0, 32)
+inspContent.BackgroundTransparency = 1
+inspContent.Visible = false
+inspContent.Parent = inspectorFrame
+
+local inspClipName = Instance.new("TextLabel")
+inspClipName.Size = UDim2.new(0.6, 0, 0, 20)
+inspClipName.Position = UDim2.new(0, 0, 0, 0)
+inspClipName.BackgroundTransparency = 1
+inspClipName.Text = "Clip Name"
+inspClipName.TextColor3 = C.text
+inspClipName.Font = Enum.Font.GothamBold
+inspClipName.TextSize = 12
+inspClipName.TextXAlignment = Enum.TextXAlignment.Left
+inspClipName.Parent = inspContent
+
+local inspDurationSummary = Instance.new("TextLabel")
+inspDurationSummary.Size = UDim2.new(0.4, 0, 0, 20)
+inspDurationSummary.Position = UDim2.new(0.6, 0, 0, 0)
+inspDurationSummary.BackgroundTransparency = 1
+inspDurationSummary.Text = "Length: 0.00s"
+inspDurationSummary.TextColor3 = C.accentBlue
+inspDurationSummary.Font = Enum.Font.GothamMedium
+inspDurationSummary.TextSize = 11
+inspDurationSummary.TextXAlignment = Enum.TextXAlignment.Right
+inspDurationSummary.Parent = inspContent
+
+-- Trim Start (In Point) Row
+local trimStartLabel = Instance.new("TextLabel")
+trimStartLabel.Size = UDim2.new(0, 110, 0, 22)
+trimStartLabel.Position = UDim2.new(0, 0, 0, 28)
+trimStartLabel.BackgroundTransparency = 1
+trimStartLabel.Text = "Trim Start (Crop In):"
+trimStartLabel.TextColor3 = C.textMuted
+trimStartLabel.Font = Enum.Font.GothamMedium
+trimStartLabel.TextSize = 10
+trimStartLabel.TextXAlignment = Enum.TextXAlignment.Left
+trimStartLabel.Parent = inspContent
+
+local trimStartBox = Instance.new("TextBox")
+trimStartBox.Size = UDim2.new(0, 60, 0, 22)
+trimStartBox.Position = UDim2.new(0, 115, 0, 28)
+trimStartBox.BackgroundColor3 = C.input
+trimStartBox.Text = "0.00"
+trimStartBox.TextColor3 = C.text
+trimStartBox.Font = Enum.Font.GothamBold
+trimStartBox.TextSize = 10
+trimStartBox.Parent = inspContent
+applyCorner(trimStartBox, 4)
+applyStroke(trimStartBox, C.divider, 1, 0)
+
+local trimStartSlider = Instance.new("TextButton")
+trimStartSlider.Size = UDim2.new(1, -190, 0, 12)
+trimStartSlider.Position = UDim2.new(0, 185, 0, 33)
+trimStartSlider.BackgroundColor3 = C.surface
+trimStartSlider.Text = ""
+trimStartSlider.Parent = inspContent
+applyCorner(trimStartSlider, 6)
+
+local trimStartFill = Instance.new("Frame")
+trimStartFill.Size = UDim2.new(0, 0, 1, 0)
+trimStartFill.BackgroundColor3 = C.accentBlue
+trimStartFill.BorderSizePixel = 0
+trimStartFill.Parent = trimStartSlider
+applyCorner(trimStartFill, 6)
+
+-- Trim End (Out Point) Row
+local trimEndLabel = Instance.new("TextLabel")
+trimEndLabel.Size = UDim2.new(0, 110, 0, 22)
+trimEndLabel.Position = UDim2.new(0, 0, 0, 56)
+trimEndLabel.BackgroundTransparency = 1
+trimEndLabel.Text = "Trim End (Crop Out):"
+trimEndLabel.TextColor3 = C.textMuted
+trimEndLabel.Font = Enum.Font.GothamMedium
+trimEndLabel.TextSize = 10
+trimEndLabel.TextXAlignment = Enum.TextXAlignment.Left
+trimEndLabel.Parent = inspContent
+
+local trimEndBox = Instance.new("TextBox")
+trimEndBox.Size = UDim2.new(0, 60, 0, 22)
+trimEndBox.Position = UDim2.new(0, 115, 0, 56)
+trimEndBox.BackgroundColor3 = C.input
+trimEndBox.Text = "0.00"
+trimEndBox.TextColor3 = C.text
+trimEndBox.Font = Enum.Font.GothamBold
+trimEndBox.TextSize = 10
+trimEndBox.Parent = inspContent
+applyCorner(trimEndBox, 4)
+applyStroke(trimEndBox, C.divider, 1, 0)
+
+local trimEndSlider = Instance.new("TextButton")
+trimEndSlider.Size = UDim2.new(1, -190, 0, 12)
+trimEndSlider.Position = UDim2.new(0, 185, 0, 61)
+trimEndSlider.BackgroundColor3 = C.surface
+trimEndSlider.Text = ""
+trimEndSlider.Parent = inspContent
+applyCorner(trimEndSlider, 6)
+
+local trimEndFill = Instance.new("Frame")
+trimEndFill.Size = UDim2.new(1, 0, 1, 0)
+trimEndFill.BackgroundColor3 = C.green
+trimEndFill.BorderSizePixel = 0
+trimEndFill.Parent = trimEndSlider
+applyCorner(trimEndFill, 6)
+
+-- Speed Row
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Size = UDim2.new(0, 110, 0, 22)
+speedLabel.Position = UDim2.new(0, 0, 0, 84)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "Playback Speed:"
+speedLabel.TextColor3 = C.textMuted
+speedLabel.Font = Enum.Font.GothamMedium
+speedLabel.TextSize = 10
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+speedLabel.Parent = inspContent
+
+local speedBtnsContainer = Instance.new("Frame")
+speedBtnsContainer.Size = UDim2.new(1, -115, 0, 24)
+speedBtnsContainer.Position = UDim2.new(0, 115, 0, 84)
+speedBtnsContainer.BackgroundTransparency = 1
+speedBtnsContainer.Parent = inspContent
+
+local speedLayout = Instance.new("UIListLayout")
+speedLayout.FillDirection = Enum.FillDirection.Horizontal
+speedLayout.Padding = UDim.new(0, 4)
+speedLayout.Parent = speedBtnsContainer
+
+local speedButtons = {}
+local speedOptions = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 }
+
+-- Clip Action Buttons (Move Left, Move Right, Duplicate, Delete)
+local clipActionsRow = Instance.new("Frame")
+clipActionsRow.Size = UDim2.new(1, 0, 0, 26)
+clipActionsRow.Position = UDim2.new(0, 0, 1, -26)
+clipActionsRow.BackgroundTransparency = 1
+clipActionsRow.Parent = inspContent
+
+local btnMoveLeft = Instance.new("TextButton")
+btnMoveLeft.Size = UDim2.new(0, 85, 1, 0)
+btnMoveLeft.BackgroundColor3 = C.surface
+btnMoveLeft.Text = "◀ Move Earlier"
+btnMoveLeft.TextColor3 = C.text
+btnMoveLeft.Font = Enum.Font.GothamMedium
+btnMoveLeft.TextSize = 9
+btnMoveLeft.Parent = clipActionsRow
+applyCorner(btnMoveLeft, 4)
+applyStroke(btnMoveLeft, C.divider, 1, 0.3)
+
+local btnMoveRight = Instance.new("TextButton")
+btnMoveRight.Size = UDim2.new(0, 85, 1, 0)
+btnMoveRight.Position = UDim2.new(0, 92, 0, 0)
+btnMoveRight.BackgroundColor3 = C.surface
+btnMoveRight.Text = "Move Later ▶"
+btnMoveRight.TextColor3 = C.text
+btnMoveRight.Font = Enum.Font.GothamMedium
+btnMoveRight.TextSize = 9
+btnMoveRight.Parent = clipActionsRow
+applyCorner(btnMoveRight, 4)
+applyStroke(btnMoveRight, C.divider, 1, 0.3)
+
+local btnDuplicateClip = Instance.new("TextButton")
+btnDuplicateClip.Size = UDim2.new(0, 75, 1, 0)
+btnDuplicateClip.Position = UDim2.new(0, 184, 0, 0)
+btnDuplicateClip.BackgroundColor3 = C.surface
+btnDuplicateClip.Text = "Duplicate"
+btnDuplicateClip.TextColor3 = C.accentBlue
+btnDuplicateClip.Font = Enum.Font.GothamMedium
+btnDuplicateClip.TextSize = 9
+btnDuplicateClip.Parent = clipActionsRow
+applyCorner(btnDuplicateClip, 4)
+applyStroke(btnDuplicateClip, C.divider, 1, 0.3)
+
+local btnDeleteClip = Instance.new("TextButton")
+btnDeleteClip.Size = UDim2.new(0, 75, 1, 0)
+btnDeleteClip.Position = UDim2.new(1, -75, 0, 0)
+btnDeleteClip.BackgroundColor3 = Color3.fromRGB(40, 18, 22)
+btnDeleteClip.Text = "🗑 Delete"
+btnDeleteClip.TextColor3 = C.danger
+btnDeleteClip.Font = Enum.Font.GothamBold
+btnDeleteClip.TextSize = 9
+btnDeleteClip.Parent = clipActionsRow
+applyCorner(btnDeleteClip, 4)
+applyStroke(btnDeleteClip, Color3.fromRGB(120, 30, 40), 1, 0.3)
+
+-- LOWER ZONE: MULTI-CLIP VISUAL TIMELINE TRACK (Height: Remaining space ~314px)
+local timelineSection = Instance.new("Frame")
+timelineSection.Size = UDim2.new(1, 0, 1, -180)
+timelineSection.Position = UDim2.new(0, 0, 0, 180)
+timelineSection.BackgroundColor3 = C.trackBg
+timelineSection.BorderSizePixel = 0
+timelineSection.ClipsDescendants = true
+timelineSection.Parent = rightPanel
+
+-- Timeline Horizontal Scroll Container
+local timelineScroll = Instance.new("ScrollingFrame")
+timelineScroll.Size = UDim2.new(1, 0, 1, 0)
+timelineScroll.BackgroundTransparency = 1
+timelineScroll.BorderSizePixel = 0
+timelineScroll.ScrollBarThickness = 5
+timelineScroll.ScrollBarImageColor3 = C.border
+timelineScroll.ScrollBarImageTransparency = 0.5
+timelineScroll.ScrollingDirection = Enum.ScrollingDirection.X
+timelineScroll.CanvasSize = UDim2.new(0, 1200, 0, 0)
+timelineScroll.Parent = timelineSection
+
+-- Time Ruler (Top of Sequencer)
+local rulerContainer = Instance.new("Frame")
+rulerContainer.Size = UDim2.new(1, 0, 0, 28)
+rulerContainer.BackgroundColor3 = C.rulerBg
+rulerContainer.BorderSizePixel = 0
+rulerContainer.Parent = timelineScroll
+applyStroke(rulerContainer, C.divider, 1, 0)
+
+local rulerTicksFrame = Instance.new("Frame")
+rulerTicksFrame.Size = UDim2.new(1, 0, 1, 0)
+rulerTicksFrame.BackgroundTransparency = 1
+rulerTicksFrame.Parent = rulerContainer
+
+-- Clips Track Lane (Middle)
+local trackLane = Instance.new("Frame")
+trackLane.Size = UDim2.new(1, 0, 0, 80)
+trackLane.Position = UDim2.new(0, 0, 0, 36)
+trackLane.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+trackLane.BorderSizePixel = 0
+trackLane.Parent = timelineScroll
+applyStroke(trackLane, C.divider, 1, 0)
+
+local clipsContainer = Instance.new("Frame")
+clipsContainer.Size = UDim2.new(1, 0, 1, 0)
+clipsContainer.BackgroundTransparency = 1
+clipsContainer.Parent = trackLane
+
+-- Red Scrubber Playhead (Needle)
+local playhead = Instance.new("Frame")
+playhead.Size = UDim2.new(0, 2, 1, 0)
+playhead.Position = UDim2.new(0, 0, 0, 0)
+playhead.BackgroundColor3 = C.red
+playhead.BorderSizePixel = 0
+playhead.ZIndex = 30
+playhead.Parent = timelineScroll
+
+local playheadHandle = Instance.new("Frame")
+playheadHandle.Size = UDim2.new(0, 12, 0, 16)
+playheadHandle.Position = UDim2.new(0.5, -6, 0, 0)
+playheadHandle.BackgroundColor3 = C.red
+playheadHandle.BorderSizePixel = 0
+playheadHandle.ZIndex = 31
+playheadHandle.Parent = playhead
+applyCorner(playheadHandle, 3)
+
+local playheadTimeBubble = Instance.new("TextLabel")
+playheadTimeBubble.Size = UDim2.new(0, 54, 0, 16)
+playheadTimeBubble.Position = UDim2.new(0.5, -27, 0, -18)
+playheadTimeBubble.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
+playheadTimeBubble.Text = "00:00.0"
+playheadTimeBubble.TextColor3 = C.red
+playheadTimeBubble.Font = Enum.Font.Code
+playheadTimeBubble.TextSize = 9
+playheadTimeBubble.ZIndex = 32
+playheadTimeBubble.Parent = playhead
+applyCorner(playheadTimeBubble, 3)
+applyStroke(playheadTimeBubble, C.red, 1, 0.4)
+
+-- Empty Track helper text
+local emptyTrackLabel = Instance.new("TextLabel")
+emptyTrackLabel.Size = UDim2.new(0, 360, 0, 40)
+emptyTrackLabel.Position = UDim2.new(0, 20, 0, 20)
+emptyTrackLabel.BackgroundTransparency = 1
+emptyTrackLabel.Text = "No clips on timeline.\nClick [+ Add to Track] on any animation in the Media Library to begin."
+emptyTrackLabel.TextColor3 = C.textMuted
+emptyTrackLabel.Font = Enum.Font.GothamMedium
+emptyTrackLabel.TextSize = 11
+emptyTrackLabel.TextXAlignment = Enum.TextXAlignment.Left
+emptyTrackLabel.Visible = true
+emptyTrackLabel.Parent = trackLane
+
+-- ══════════════════════════════════════════════════════════════════
+-- 8. RENDER & INTERACTION ENGINE
+-- ══════════════════════════════════════════════════════════════════
+local renderTimelineTrack
+local updateInspectorUI
+
+local function setScrubberTime(targetTime)
+    recalculateTimeline()
+    local clamped = math.clamp(targetTime, 0, math.max(0.1, Timeline.totalDuration))
+    Timeline.currentTime = clamped
+    timecodeLabel.Text = formatTime(clamped)
+    playheadTimeBubble.Text = string.format("%04.1fs", clamped)
+
+    local posX = clamped * Timeline.pixelsPerSecond
+    playhead.Position = UDim2.new(0, posX, 0, 0)
+
+    evaluateAndPoseAvatar(clamped)
+end
+
+-- Scrubbing Interaction
+local isScrubbing = false
+local function handleScrubInput(input)
+    local relX = input.Position.X - trackLane.AbsolutePosition.X
+    local scrolledX = relX + timelineScroll.CanvasPosition.X
+    local targetSecs = math.max(0, scrolledX / Timeline.pixelsPerSecond)
+    setScrubberTime(targetSecs)
+end
+
+timelineScroll.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isScrubbing = true
+        handleScrubInput(input)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        isScrubbing = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if isScrubbing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        handleScrubInput(input)
+    end
+end)
+
+-- Transport Playback Loop
+local function stopPlayback()
+    if not Timeline.isPlaying then return end
+    Timeline.isPlaying = false
+    if Timeline.playbackConn then
+        Timeline.playbackConn:Disconnect()
+        Timeline.playbackConn = nil
+    end
+    btnPlay.Text = "▶ PLAY"
+    btnPlay.TextColor3 = C.green
+    btnPlay.BackgroundColor3 = Color3.fromRGB(30, 60, 40)
+end
+
+local function startPlayback()
+    if Timeline.isPlaying then return end
+    if #Timeline.clips == 0 or Timeline.totalDuration <= 0 then return end
+
+    Timeline.isPlaying = true
+    Timeline.startTime = tick()
+    Timeline.startOffset = Timeline.currentTime
+
+    if Timeline.currentTime >= Timeline.totalDuration - 0.05 then
+        Timeline.currentTime = 0
+        Timeline.startOffset = 0
+    end
+
+    btnPlay.Text = "⏸ PAUSE"
+    btnPlay.TextColor3 = Color3.fromRGB(255, 200, 80)
+    btnPlay.BackgroundColor3 = Color3.fromRGB(60, 45, 20)
+
+    Timeline.playbackConn = RunService.Heartbeat:Connect(function()
+        if not Timeline.isPlaying then return end
+        local elapsed = tick() - Timeline.startTime
+        local newTime = Timeline.startOffset + elapsed
+
+        if newTime >= Timeline.totalDuration then
+            if Timeline.isLooping then
+                Timeline.startTime = tick()
+                Timeline.startOffset = 0
+                newTime = 0
+            else
+                stopPlayback()
+                setScrubberTime(Timeline.totalDuration)
+                return
+            end
+        end
+
+        setScrubberTime(newTime)
+    end)
+end
+
+btnPlay.MouseButton1Click:Connect(function()
+    if Timeline.isPlaying then
+        stopPlayback()
+    else
+        startPlayback()
+    end
+end)
+
+btnStop.MouseButton1Click:Connect(function()
+    stopPlayback()
+    setScrubberTime(0)
+end)
+
+btnRewind.MouseButton1Click:Connect(function()
+    setScrubberTime(0)
+end)
+
+btnStepBack.MouseButton1Click:Connect(function()
+    setScrubberTime(Timeline.currentTime - (1 / Timeline.fps))
+end)
+
+btnStepFwd.MouseButton1Click:Connect(function()
+    setScrubberTime(Timeline.currentTime + (1 / Timeline.fps))
+end)
+
+btnLoop.MouseButton1Click:Connect(function()
+    Timeline.isLooping = not Timeline.isLooping
+    btnLoop.TextColor3 = Timeline.isLooping and C.green or C.textMuted
+    btnLoop.BackgroundColor3 = Timeline.isLooping and Color3.fromRGB(20, 45, 30) or C.input
+end)
+
+-- Spacebar shortcut to play/pause
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe then return end
+    if input.KeyCode == Enum.KeyCode.Space then
+        if Timeline.isPlaying then stopPlayback() else startPlayback() end
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════════════
+-- 9. RENDER TIMELINE TRACKS & RULER
+-- ══════════════════════════════════════════════════════════════════
+function renderTimelineTrack()
+    recalculateTimeline()
+
+    for _, c in ipairs(clipsContainer:GetChildren()) do
+        if c:IsA("Frame") or c:IsA("TextButton") then c:Destroy() end
+    end
+
+    for _, c in ipairs(rulerTicksFrame:GetChildren()) do
+        if c:IsA("Frame") or c:IsA("TextLabel") then c:Destroy() end
+    end
+
+    local totalWidth = math.max(800, (Timeline.totalDuration + 4) * Timeline.pixelsPerSecond)
+    timelineScroll.CanvasSize = UDim2.new(0, totalWidth, 0, 0)
+    emptyTrackLabel.Visible = (#Timeline.clips == 0)
+
+    -- Draw Ruler Markings every 0.5s and 1.0s
+    local numSeconds = math.ceil(totalWidth / Timeline.pixelsPerSecond)
+    for s = 0, numSeconds do
+        local posX = s * Timeline.pixelsPerSecond
+
+        local tickLine = Instance.new("Frame")
+        tickLine.Size = UDim2.new(0, 1, 0, 10)
+        tickLine.Position = UDim2.new(0, posX, 1, -10)
+        tickLine.BackgroundColor3 = C.divider
+        tickLine.BorderSizePixel = 0
+        tickLine.Parent = rulerTicksFrame
+
+        local tickLabel = Instance.new("TextLabel")
+        tickLabel.Size = UDim2.new(0, 36, 0, 12)
+        tickLabel.Position = UDim2.new(0, posX - 18, 0, 4)
+        tickLabel.BackgroundTransparency = 1
+        tickLabel.Text = string.format("%d.0s", s)
+        tickLabel.TextColor3 = C.textMuted
+        tickLabel.Font = Enum.Font.Code
+        tickLabel.TextSize = 8
+        tickLabel.Parent = rulerTicksFrame
+
+        -- Half second tick
+        local halfTick = Instance.new("Frame")
+        halfTick.Size = UDim2.new(0, 1, 0, 5)
+        halfTick.Position = UDim2.new(0, posX + (Timeline.pixelsPerSecond / 2), 1, -5)
+        halfTick.BackgroundColor3 = C.divider
+        halfTick.BorderSizePixel = 0
+        halfTick.Parent = rulerTicksFrame
+    end
+
+    -- Draw Visual Clips
+    for idx, clip in ipairs(Timeline.clips) do
+        local posX = clip.timelineStart * Timeline.pixelsPerSecond
+        local clipW = math.max(24, clip.duration * Timeline.pixelsPerSecond)
+        local isSelected = (Timeline.selectedClipIndex == idx)
+
+        local clipCard = Instance.new("TextButton")
+        clipCard.Size = UDim2.new(0, clipW - 2, 1, -8)
+        clipCard.Position = UDim2.new(0, posX + 1, 0, 4)
+        clipCard.BackgroundColor3 = clip.color
+        clipCard.Text = ""
+        clipCard.AutoButtonColor = false
+        clipCard.Parent = clipsContainer
+        applyCorner(clipCard, 6)
+
+        local cardStroke = applyStroke(clipCard, isSelected and C.accent or Color3.fromRGB(0, 0, 0), isSelected and 2 or 1, isSelected and 0 or 0.6)
+
+        -- Top color accent banner
+        local topBanner = Instance.new("Frame")
+        topBanner.Size = UDim2.new(1, 0, 0, 4)
+        topBanner.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+        topBanner.BackgroundTransparency = isSelected and 0.2 or 0.7
+        topBanner.BorderSizePixel = 0
+        topBanner.Parent = clipCard
+        applyCorner(topBanner, 2)
+
+        -- Title & Timing inside Clip
+        local clipTitle = Instance.new("TextLabel")
+        clipTitle.Size = UDim2.new(1, -10, 0, 16)
+        clipTitle.Position = UDim2.new(0, 6, 0, 8)
+        clipTitle.BackgroundTransparency = 1
+        clipTitle.Text = clip.name
+        clipTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
+        clipTitle.Font = Enum.Font.GothamBold
+        clipTitle.TextSize = 10
+        clipTitle.TextXAlignment = Enum.TextXAlignment.Left
+        clipTitle.TextTruncate = Enum.TextTruncate.AtEnd
+        clipTitle.Parent = clipCard
+
+        local clipSub = Instance.new("TextLabel")
+        clipSub.Size = UDim2.new(1, -10, 0, 14)
+        clipSub.Position = UDim2.new(0, 6, 0, 26)
+        clipSub.BackgroundTransparency = 1
+        clipSub.Text = string.format("%.2fs  [%.1f-%.1fs]", clip.duration, clip.trimStart, clip.trimEnd)
+        clipSub.TextColor3 = Color3.fromRGB(220, 220, 230)
+        clipSub.Font = Enum.Font.GothamMedium
+        clipSub.TextSize = 9
+        clipSub.TextXAlignment = Enum.TextXAlignment.Left
+        clipSub.TextTruncate = Enum.TextTruncate.AtEnd
+        clipSub.Parent = clipCard
+
+        -- Select Clip Action
+        clipCard.MouseButton1Click:Connect(function()
+            Timeline.selectedClipIndex = idx
+            updateInspectorUI()
+            renderTimelineTrack()
+        end)
+    end
+
+    setScrubberTime(Timeline.currentTime)
+end
+
+-- ══════════════════════════════════════════════════════════════════
+-- 10. INSPECTOR UI CONTROLLER
+-- ══════════════════════════════════════════════════════════════════
+function updateInspectorUI()
+    local idx = Timeline.selectedClipIndex
+    local clip = idx and Timeline.clips[idx]
+
+    if not clip then
+        inspEmptyLabel.Visible = true
+        inspContent.Visible = false
+        return
+    end
+
+    inspEmptyLabel.Visible = false
+    inspContent.Visible = true
+
+    inspClipName.Text = string.format("[%d] %s", idx, clip.name)
+    inspDurationSummary.Text = string.format("Length: %.2fs (Orig: %.2fs)", clip.duration, clip.originalDuration)
+
+    trimStartBox.Text = string.format("%.2f", clip.trimStart)
+    trimEndBox.Text = string.format("%.2f", clip.trimEnd)
+
+    local maxD = math.max(0.1, clip.originalDuration)
+    trimStartFill.Size = UDim2.new(math.clamp(clip.trimStart / maxD, 0, 1), 0, 1, 0)
+    trimEndFill.Size = UDim2.new(math.clamp(clip.trimEnd / maxD, 0, 1), 0, 1, 0)
+
+    -- Update Speed Buttons Highlight
+    for _, btn in ipairs(speedBtnsContainer:GetChildren()) do
+        if btn:IsA("TextButton") then btn:Destroy() end
+    end
+
+    for _, spd in ipairs(speedOptions) do
+        local sBtn = Instance.new("TextButton")
+        sBtn.Size = UDim2.new(0, 38, 1, 0)
+        sBtn.BackgroundColor3 = (clip.speed == spd) and C.accentBlue or C.surface
+        sBtn.Text = tostring(spd) .. "x"
+        sBtn.TextColor3 = (clip.speed == spd) and Color3.fromRGB(255, 255, 255) or C.textMuted
+        sBtn.Font = Enum.Font.GothamBold
+        sBtn.TextSize = 9
+        sBtn.Parent = speedBtnsContainer
+        applyCorner(sBtn, 4)
+
+        sBtn.MouseButton1Click:Connect(function()
+            clip.speed = spd
+            updateInspectorUI()
+            renderTimelineTrack()
+        end)
+    end
+end
+
+-- Trim Start Box edit
+trimStartBox.FocusLost:Connect(function()
+    local idx = Timeline.selectedClipIndex
+    local clip = idx and Timeline.clips[idx]
+    if not clip then return end
+
+    local val = tonumber(trimStartBox.Text)
+    if val then
+        clip.trimStart = math.clamp(val, 0, clip.trimEnd - 0.05)
+    end
+    updateInspectorUI()
+    renderTimelineTrack()
+end)
+
+-- Trim End Box edit
+trimEndBox.FocusLost:Connect(function()
+    local idx = Timeline.selectedClipIndex
+    local clip = idx and Timeline.clips[idx]
+    if not clip then return end
+
+    local val = tonumber(trimEndBox.Text)
+    if val then
+        clip.trimEnd = math.clamp(val, clip.trimStart + 0.05, clip.originalDuration)
+    end
+    updateInspectorUI()
+    renderTimelineTrack()
+end)
+
+-- Trim Start Slider dragging
+local isDraggingTrimStart = false
+trimStartSlider.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isDraggingTrimStart = true
+    end
+end)
+
+-- Trim End Slider dragging
+local isDraggingTrimEnd = false
+trimEndSlider.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isDraggingTrimEnd = true
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isDraggingTrimStart = false
+        isDraggingTrimEnd = false
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement then
+        local idx = Timeline.selectedClipIndex
+        local clip = idx and Timeline.clips[idx]
+        if not clip then return end
+        local maxD = math.max(0.1, clip.originalDuration)
+
+        if isDraggingTrimStart then
+            local relX = math.clamp(input.Position.X - trimStartSlider.AbsolutePosition.X, 0, trimStartSlider.AbsoluteSize.X)
+            local pct = relX / trimStartSlider.AbsoluteSize.X
+            clip.trimStart = math.clamp(pct * maxD, 0, clip.trimEnd - 0.05)
+            updateInspectorUI()
+            renderTimelineTrack()
+        elseif isDraggingTrimEnd then
+            local relX = math.clamp(input.Position.X - trimEndSlider.AbsolutePosition.X, 0, trimEndSlider.AbsoluteSize.X)
+            local pct = relX / trimEndSlider.AbsoluteSize.X
+            clip.trimEnd = math.clamp(pct * maxD, clip.trimStart + 0.05, clip.originalDuration)
+            updateInspectorUI()
+            renderTimelineTrack()
+        end
+    end
+end)
+
+-- Move Clip Earlier
+btnMoveLeft.MouseButton1Click:Connect(function()
+    local idx = Timeline.selectedClipIndex
+    if idx and idx > 1 then
+        local clip = table.remove(Timeline.clips, idx)
+        table.insert(Timeline.clips, idx - 1, clip)
+        Timeline.selectedClipIndex = idx - 1
+        updateInspectorUI()
+        renderTimelineTrack()
+    end
+end)
+
+-- Move Clip Later
+btnMoveRight.MouseButton1Click:Connect(function()
+    local idx = Timeline.selectedClipIndex
+    if idx and idx < #Timeline.clips then
+        local clip = table.remove(Timeline.clips, idx)
+        table.insert(Timeline.clips, idx + 1, clip)
+        Timeline.selectedClipIndex = idx + 1
+        updateInspectorUI()
+        renderTimelineTrack()
+    end
+end)
+
+-- Duplicate Clip
+btnDuplicateClip.MouseButton1Click:Connect(function()
+    local idx = Timeline.selectedClipIndex
+    local clip = idx and Timeline.clips[idx]
+    if clip then
+        local newClip = {
+            id = "clip_" .. tostring(tick()) .. "_" .. tostring(math.random(100, 999)),
+            name = clip.name,
+            path = clip.path,
+            keyframes = clip.keyframes,
+            originalDuration = clip.originalDuration,
+            trimStart = clip.trimStart,
+            trimEnd = clip.trimEnd,
+            speed = clip.speed,
+            color = CLIP_COLORS[((#Timeline.clips) % #CLIP_COLORS) + 1]
+        }
+        table.insert(Timeline.clips, idx + 1, newClip)
+        Timeline.selectedClipIndex = idx + 1
+        updateInspectorUI()
+        renderTimelineTrack()
+    end
+end)
+
+-- Delete Clip
+btnDeleteClip.MouseButton1Click:Connect(function()
+    local idx = Timeline.selectedClipIndex
+    if idx and Timeline.clips[idx] then
+        table.remove(Timeline.clips, idx)
+        if #Timeline.clips == 0 then
+            Timeline.selectedClipIndex = nil
+        else
+            Timeline.selectedClipIndex = math.clamp(idx, 1, #Timeline.clips)
+        end
+        updateInspectorUI()
+        renderTimelineTrack()
+    end
+end)
+
+-- ══════════════════════════════════════════════════════════════════
+-- 11. MEDIA LIBRARY CONTROLLER (+ Add to Track)
+-- ══════════════════════════════════════════════════════════════════
+local function populateMediaLibrary(filterText)
+    for _, c in ipairs(libScroll:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+
+    local term = (filterText or ""):lower()
+    local count = 0
+
+    for _, item in ipairs(animationCatalog) do
+        if term == "" or item.name:lower():find(term, 1, true) then
+            count = count + 1
+
+            local card = Instance.new("Frame")
+            card.Size = UDim2.new(1, -6, 0, 36)
+            card.BackgroundColor3 = C.surface
+            card.Parent = libScroll
+            applyCorner(card, 5)
+            applyStroke(card, C.divider, 1, 0.4)
+
+            local title = Instance.new("TextLabel")
+            title.Size = UDim2.new(1, -75, 1, 0)
+            title.Position = UDim2.new(0, 8, 0, 0)
+            title.BackgroundTransparency = 1
+            title.Text = item.name
+            title.TextColor3 = item.isCustom and Color3.fromRGB(100, 220, 255) or C.text
+            title.Font = Enum.Font.GothamMedium
+            title.TextSize = 10
+            title.TextXAlignment = Enum.TextXAlignment.Left
+            title.TextTruncate = Enum.TextTruncate.AtEnd
+            title.Parent = card
+
+            local btnAdd = Instance.new("TextButton")
+            btnAdd.Size = UDim2.new(0, 58, 0, 24)
+            btnAdd.Position = UDim2.new(1, -64, 0.5, -12)
+            btnAdd.BackgroundColor3 = Color3.fromRGB(22, 38, 55)
+            btnAdd.Text = "+ Track"
+            btnAdd.TextColor3 = C.accentBlue
+            btnAdd.Font = Enum.Font.GothamBold
+            btnAdd.TextSize = 10
+            btnAdd.Parent = card
+            applyCorner(btnAdd, 4)
+            applyStroke(btnAdd, Color3.fromRGB(40, 80, 130), 1, 0.3)
+
+            btnAdd.MouseButton1Click:Connect(function()
+                btnAdd.Text = "..."
+                getKeyframesAsync(item, function(kfs)
+                    if kfs and #kfs > 0 then
+                        local origDur = kfs[#kfs].Time
+                        local colorIdx = ((#Timeline.clips) % #CLIP_COLORS) + 1
+                        local clip = {
+                            id = "clip_" .. tostring(tick()),
+                            name = item.name,
+                            path = item.path,
+                            keyframes = kfs,
+                            originalDuration = origDur,
+                            trimStart = 0,
+                            trimEnd = origDur,
+                            speed = 1.0,
+                            duration = origDur,
+                            color = CLIP_COLORS[colorIdx]
+                        }
+                        table.insert(Timeline.clips, clip)
+                        Timeline.selectedClipIndex = #Timeline.clips
+                        updateInspectorUI()
+                        renderTimelineTrack()
+                        btnAdd.Text = "Added!"
+                        task.delay(1, function() btnAdd.Text = "+ Track" end)
+                    else
+                        btnAdd.Text = "Failed"
+                        btnAdd.TextColor3 = C.danger
+                        task.delay(1.5, function()
+                            btnAdd.Text = "+ Track"
+                            btnAdd.TextColor3 = C.accentBlue
+                        end)
+                    end
+                end)
+            end)
+        end
+    end
+
+    libScroll.CanvasSize = UDim2.new(0, 0, 0, count * 40)
+end
+
+libSearch:GetPropertyChangedSignal("Text"):Connect(function()
+    populateMediaLibrary(libSearch.Text)
+end)
+
+populateMediaLibrary("")
+
+-- ══════════════════════════════════════════════════════════════════
+-- 12. IMPORT CUSTOM SCRIPT MODAL
+-- ══════════════════════════════════════════════════════════════════
+local importModal = Instance.new("Frame")
+importModal.Size = UDim2.new(1, 0, 1, 0)
+importModal.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+importModal.BackgroundTransparency = 0.45
+importModal.BorderSizePixel = 0
+importModal.ZIndex = 50
+importModal.Visible = false
+importModal.Parent = mainFrame
+
+local importCard = Instance.new("Frame")
+importCard.Size = UDim2.new(0, 420, 0, 360)
+importCard.Position = UDim2.new(0.5, -210, 0.5, -180)
+importCard.BackgroundColor3 = C.bg
+importCard.ZIndex = 51
+importCard.Parent = importModal
+applyCorner(importCard, 8)
+applyStroke(importCard, C.border, 1.5, 0)
+
+local importTitle = Instance.new("TextLabel")
+importTitle.Size = UDim2.new(1, -50, 0, 34)
+importTitle.Position = UDim2.new(0, 14, 0, 6)
+importTitle.BackgroundTransparency = 1
+importTitle.Text = "Import Animation into Library"
+importTitle.TextColor3 = C.text
+importTitle.Font = Enum.Font.GothamBold
+importTitle.TextSize = 12
+importTitle.TextXAlignment = Enum.TextXAlignment.Left
+importTitle.ZIndex = 52
+importTitle.Parent = importCard
+
+local importCloseBtn = Instance.new("TextButton")
+importCloseBtn.Size = UDim2.new(0, 24, 0, 24)
+importCloseBtn.Position = UDim2.new(1, -34, 0, 10)
+importCloseBtn.BackgroundColor3 = C.surface
+importCloseBtn.Text = "✕"
+importCloseBtn.TextColor3 = C.textMuted
+importCloseBtn.Font = Enum.Font.GothamBold
+importCloseBtn.TextSize = 11
+importCloseBtn.ZIndex = 52
+importCloseBtn.Parent = importCard
+applyCorner(importCloseBtn, 12)
+
+local importNameBox = Instance.new("TextBox")
+importNameBox.Size = UDim2.new(1, -28, 0, 28)
+importNameBox.Position = UDim2.new(0, 14, 0, 44)
+importNameBox.BackgroundColor3 = C.input
+importNameBox.PlaceholderText = "Animation Name (optional)"
+importNameBox.PlaceholderColor3 = C.textMuted
+importNameBox.Text = ""
+importNameBox.TextColor3 = C.text
+importNameBox.Font = Enum.Font.GothamMedium
+importNameBox.TextSize = 11
+importNameBox.TextXAlignment = Enum.TextXAlignment.Left
+importNameBox.ZIndex = 52
+importNameBox.Parent = importCard
+applyCorner(importNameBox, 5)
+applyStroke(importNameBox, C.divider, 1, 0)
+
+local importDataBox = Instance.new("TextBox")
+importDataBox.Size = UDim2.new(1, -28, 0, 190)
+importDataBox.Position = UDim2.new(0, 14, 0, 80)
+importDataBox.BackgroundColor3 = C.input
+importDataBox.PlaceholderText = "Paste keyframe script or table here...\n(Press Ctrl+V to paste from clipboard)"
+importDataBox.PlaceholderColor3 = C.textMuted
+importDataBox.Text = ""
+importDataBox.TextColor3 = C.green
+importDataBox.Font = Enum.Font.Code
+importDataBox.TextSize = 10
+importDataBox.MultiLine = true
+importDataBox.ClearTextOnFocus = false
+importDataBox.TextXAlignment = Enum.TextXAlignment.Left
+importDataBox.TextYAlignment = Enum.TextYAlignment.Top
+importDataBox.ClipsDescendants = true
+importDataBox.ZIndex = 52
+importDataBox.Parent = importCard
+applyCorner(importDataBox, 5)
+applyStroke(importDataBox, C.divider, 1, 0)
+
+local importStatus = Instance.new("TextLabel")
+importStatus.Size = UDim2.new(1, -28, 0, 20)
+importStatus.Position = UDim2.new(0, 14, 0, 278)
+importStatus.BackgroundTransparency = 1
+importStatus.Text = "Paste script table above."
+importStatus.TextColor3 = C.textMuted
+importStatus.Font = Enum.Font.Gotham
+importStatus.TextSize = 10
+importStatus.TextXAlignment = Enum.TextXAlignment.Left
+importStatus.ZIndex = 52
+importStatus.Parent = importCard
+
+local importSubmitBtn = Instance.new("TextButton")
+importSubmitBtn.Size = UDim2.new(1, -28, 0, 32)
+importSubmitBtn.Position = UDim2.new(0, 14, 1, -44)
+importSubmitBtn.BackgroundColor3 = Color3.fromRGB(24, 45, 32)
+importSubmitBtn.Text = "+ Add to Library"
+importSubmitBtn.TextColor3 = C.green
+importSubmitBtn.Font = Enum.Font.GothamBold
+importSubmitBtn.TextSize = 11
+importSubmitBtn.ZIndex = 52
+importSubmitBtn.Parent = importCard
+applyCorner(importSubmitBtn, 6)
+applyStroke(importSubmitBtn, Color3.fromRGB(40, 110, 60), 1, 0.3)
+
+btnImportCustom.MouseButton1Click:Connect(function()
+    importModal.Visible = true
+    importNameBox.Text = ""
+    importDataBox.Text = ""
+    importStatus.Text = "Paste script table above."
+    importStatus.TextColor3 = C.textMuted
+    importNameBox:CaptureFocus()
+end)
+
+importCloseBtn.MouseButton1Click:Connect(function()
+    importModal.Visible = false
+end)
+
+-- Clipboard detector on Ctrl+V
+local isImportBoxFocused = false
+importDataBox.Focused:Connect(function() isImportBoxFocused = true end)
+importDataBox.FocusLost:Connect(function() isImportBoxFocused = false end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not isImportBoxFocused then return end
+    if input.KeyCode == Enum.KeyCode.V and (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
+        task.spawn(function()
+            local ok, clip = pcall(getclipboard)
+            if ok and type(clip) == "string" and #clip > 0 then
+                importDataBox.Text = clip
+                importStatus.Text = "Loaded " .. tostring(#clip) .. " characters from clipboard."
+                importStatus.TextColor3 = C.green
+            end
+        end)
+    end
+end)
+
+importSubmitBtn.MouseButton1Click:Connect(function()
+    local raw = importDataBox.Text:match("^%s*(.-)%s*$")
+    if not raw or raw == "" then
+        importStatus.Text = "Please paste keyframe script first!"
+        importStatus.TextColor3 = C.danger
+        return
+    end
+
+    local kfs = parseKeyframes(raw)
+    if not kfs or #kfs == 0 then
+        importStatus.Text = "Failed to parse keyframes from script!"
+        importStatus.TextColor3 = C.danger
+        return
+    end
+
+    local n = importNameBox.Text:match("^%s*(.-)%s*$")
+    local finalName = (n and n ~= "") and n or ("Imported_" .. tostring(#animationCatalog + 1))
+
+    table.insert(animationCatalog, {
+        name = finalName,
+        path = raw,
+        category = "Custom",
+        isCustom = true
+    })
+    keyframeCache[finalName] = kfs
+
+    table.sort(animationCatalog, function(a, b) return a.name:lower() < b.name:lower() end)
+    populateMediaLibrary(libSearch.Text)
+    importModal.Visible = false
+end)
+
+-- ══════════════════════════════════════════════════════════════════
+-- 13. MERGE & EXPORT ENGINE MODAL
+-- ══════════════════════════════════════════════════════════════════
+local exportModal = Instance.new("Frame")
+exportModal.Size = UDim2.new(1, 0, 1, 0)
+exportModal.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+exportModal.BackgroundTransparency = 0.45
+exportModal.BorderSizePixel = 0
+exportModal.ZIndex = 60
+exportModal.Visible = false
+exportModal.Parent = mainFrame
+
+local exportCard = Instance.new("Frame")
+exportCard.Size = UDim2.new(0, 440, 0, 320)
+exportCard.Position = UDim2.new(0.5, -220, 0.5, -160)
+exportCard.BackgroundColor3 = C.bg
+exportCard.ZIndex = 61
+exportCard.Parent = exportModal
+applyCorner(exportCard, 8)
+applyStroke(exportCard, C.border, 1.5, 0)
+
+local exportTitle = Instance.new("TextLabel")
+exportTitle.Size = UDim2.new(1, -50, 0, 34)
+exportTitle.Position = UDim2.new(0, 16, 0, 8)
+exportTitle.BackgroundTransparency = 1
+exportTitle.Text = "Merge & Export Timeline"
+exportTitle.TextColor3 = C.text
+exportTitle.Font = Enum.Font.GothamBold
+exportTitle.TextSize = 13
+exportTitle.TextXAlignment = Enum.TextXAlignment.Left
+exportTitle.ZIndex = 62
+exportTitle.Parent = exportCard
+
+local exportCloseBtn = Instance.new("TextButton")
+exportCloseBtn.Size = UDim2.new(0, 24, 0, 24)
+exportCloseBtn.Position = UDim2.new(1, -34, 0, 12)
+exportCloseBtn.BackgroundColor3 = C.surface
+exportCloseBtn.Text = "✕"
+exportCloseBtn.TextColor3 = C.textMuted
+exportCloseBtn.Font = Enum.Font.GothamBold
+exportCloseBtn.TextSize = 11
+exportCloseBtn.ZIndex = 62
+exportCloseBtn.Parent = exportCard
+applyCorner(exportCloseBtn, 12)
+
+exportCloseBtn.MouseButton1Click:Connect(function()
+    exportModal.Visible = false
+end)
+
+local exportInfoLabel = Instance.new("TextLabel")
+exportInfoLabel.Size = UDim2.new(1, -32, 0, 48)
+exportInfoLabel.Position = UDim2.new(0, 16, 0, 44)
+exportInfoLabel.BackgroundColor3 = C.input
+exportInfoLabel.Text = "Ready to merge clips into a single keyframe reanimation."
+exportInfoLabel.TextColor3 = C.textMuted
+exportInfoLabel.Font = Enum.Font.GothamMedium
+exportInfoLabel.TextSize = 10
+exportInfoLabel.ZIndex = 62
+exportInfoLabel.Parent = exportCard
+applyCorner(exportInfoLabel, 6)
+applyStroke(exportInfoLabel, C.divider, 1, 0)
+
+local exportNameBox = Instance.new("TextBox")
+exportNameBox.Size = UDim2.new(1, -32, 0, 30)
+exportNameBox.Position = UDim2.new(0, 16, 0, 102)
+exportNameBox.BackgroundColor3 = C.input
+exportNameBox.PlaceholderText = "Merged Animation Name (default: Merged_Sequence)"
+exportNameBox.PlaceholderColor3 = C.textMuted
+exportNameBox.Text = ""
+exportNameBox.TextColor3 = C.text
+exportNameBox.Font = Enum.Font.GothamMedium
+exportNameBox.TextSize = 11
+exportNameBox.TextXAlignment = Enum.TextXAlignment.Left
+exportNameBox.ZIndex = 62
+exportNameBox.Parent = exportCard
+applyCorner(exportNameBox, 6)
+applyStroke(exportNameBox, C.divider, 1, 0)
+local expNamePad = Instance.new("UIPadding")
+expNamePad.PaddingLeft = UDim.new(0, 10)
+expNamePad.Parent = exportNameBox
+
+local exportStatus = Instance.new("TextLabel")
+exportStatus.Size = UDim2.new(1, -32, 0, 22)
+exportStatus.Position = UDim2.new(0, 16, 0, 140)
+exportStatus.BackgroundTransparency = 1
+exportStatus.Text = "Click an export action below."
+exportStatus.TextColor3 = C.textMuted
+exportStatus.Font = Enum.Font.Gotham
+exportStatus.TextSize = 10
+exportStatus.TextXAlignment = Enum.TextXAlignment.Left
+exportStatus.ZIndex = 62
+exportStatus.Parent = exportCard
+
+-- Action Buttons in Export Modal
+local btnCopyClipboard = Instance.new("TextButton")
+btnCopyClipboard.Size = UDim2.new(1, -32, 0, 34)
+btnCopyClipboard.Position = UDim2.new(0, 16, 0, 172)
+btnCopyClipboard.BackgroundColor3 = Color3.fromRGB(24, 45, 32)
+btnCopyClipboard.Text = "📋 Copy Merged Script to Clipboard"
+btnCopyClipboard.TextColor3 = C.green
+btnCopyClipboard.Font = Enum.Font.GothamBold
+btnCopyClipboard.TextSize = 11
+btnCopyClipboard.ZIndex = 62
+btnCopyClipboard.Parent = exportCard
+applyCorner(btnCopyClipboard, 6)
+applyStroke(btnCopyClipboard, Color3.fromRGB(40, 110, 60), 1, 0.3)
+
+local btnSaveDisk = Instance.new("TextButton")
+btnSaveDisk.Size = UDim2.new(0.48, -16, 0, 32)
+btnSaveDisk.Position = UDim2.new(0, 16, 0, 214)
+btnSaveDisk.BackgroundColor3 = C.surface
+btnSaveDisk.Text = "💾 Save to File"
+btnSaveDisk.TextColor3 = C.accentBlue
+btnSaveDisk.Font = Enum.Font.GothamBold
+btnSaveDisk.TextSize = 10
+btnSaveDisk.ZIndex = 62
+btnSaveDisk.Parent = exportCard
+applyCorner(btnSaveDisk, 6)
+applyStroke(btnSaveDisk, C.divider, 1, 0.3)
+
+local btnTestPlay = Instance.new("TextButton")
+btnTestPlay.Size = UDim2.new(0.48, -16, 0, 32)
+btnTestPlay.Position = UDim2.new(0.52, 0, 0, 214)
+btnTestPlay.BackgroundColor3 = C.surface
+btnTestPlay.Text = "▶ Test on Avatar"
+btnTestPlay.TextColor3 = C.text
+btnTestPlay.Font = Enum.Font.GothamBold
+btnTestPlay.TextSize = 10
+btnTestPlay.ZIndex = 62
+btnTestPlay.Parent = exportCard
+applyCorner(btnTestPlay, 6)
+applyStroke(btnTestPlay, C.divider, 1, 0.3)
+
+local btnAddCatalog = Instance.new("TextButton")
+btnAddCatalog.Size = UDim2.new(1, -32, 0, 30)
+btnAddCatalog.Position = UDim2.new(0, 16, 1, -40)
+btnAddCatalog.BackgroundColor3 = Color3.fromRGB(20, 24, 35)
+btnAddCatalog.Text = "+ Add to Zen Reanimations Catalog"
+btnAddCatalog.TextColor3 = Color3.fromRGB(120, 180, 255)
+btnAddCatalog.Font = Enum.Font.GothamBold
+btnAddCatalog.TextSize = 10
+btnAddCatalog.ZIndex = 62
+btnAddCatalog.Parent = exportCard
+applyCorner(btnAddCatalog, 6)
+applyStroke(btnAddCatalog, Color3.fromRGB(50, 70, 110), 1, 0.3)
+
+-- Multi-Clip Merge Algorithm
+local function generateMergedScript()
+    recalculateTimeline()
+    if #Timeline.clips == 0 then return nil, "No clips on timeline." end
+
+    local mergedKeyframes = {}
+    local currentTrackStart = 0
+
+    for clipIdx, clip in ipairs(Timeline.clips) do
+        local kfs = clip.keyframes
+        if kfs and #kfs > 0 then
+            -- Find frames within [trimStart, trimEnd]
+            local startT = clip.trimStart
+            local endT = clip.trimEnd
+
+            for _, frame in ipairs(kfs) do
+                if frame.Time >= startT and frame.Time <= endT then
+                    local relativeTime = (frame.Time - startT) / clip.speed
+                    local globalTime = currentTrackStart + relativeTime
+                    table.insert(mergedKeyframes, {
+                        Time = globalTime,
+                        Data = frame.Data
+                    })
+                end
+            end
+        end
+        currentTrackStart = currentTrackStart + clip.duration
+    end
+
+    if #mergedKeyframes == 0 then
+        return nil, "Merged keyframe sequence is empty."
+    end
+
+    table.sort(mergedKeyframes, function(a, b) return a.Time < b.Time end)
+
+    -- Normalize first frame to 0.000
+    local firstTime = mergedKeyframes[1].Time
+    if firstTime > 0.001 then
+        for _, f in ipairs(mergedKeyframes) do
+            f.Time = math.max(0, f.Time - firstTime)
+        end
+    end
+
+    local totalFrames = #mergedKeyframes
+    local totalDur = mergedKeyframes[totalFrames].Time
+
+    -- Format to standard Reanimation return table
+    local lines = {}
+    table.insert(lines, "-- ══════════════════════════════════════════════════\n")
+    table.insert(lines, "-- Merged Reanimation Sequence created with Zen Studio\n")
+    table.insert(lines, string.format("-- Total Clips: %d | Keyframes: %d | Duration: %.3fs\n", #Timeline.clips, totalFrames, totalDur))
+    table.insert(lines, "-- ══════════════════════════════════════════════════\n")
+    table.insert(lines, "return {\n")
+    table.insert(lines, '  ["Animation"] = {\n')
+
+    for _, frame in ipairs(mergedKeyframes) do
+        local fStr = string.format("    {Time = %.3f, Data = {\n", frame.Time)
+        for boneName, cf in pairs(frame.Data) do
+            local c = { cf:GetComponents() }
+            local compStrs = {}
+            for j = 1, 12 do
+                compStrs[j] = string.format("%.6f", c[j])
+            end
+            fStr = fStr .. string.format('      ["%s"] = CFrame.new(%s),\n', boneName, table.concat(compStrs, ", "))
+        end
+        fStr = fStr .. "    }},\n"
+        table.insert(lines, fStr)
+    end
+
+    table.insert(lines, "  }\n")
+    table.insert(lines, "}\n")
+
+    return table.concat(lines), mergedKeyframes, totalDur
+end
+
+-- Open Export Modal
+btnExport.MouseButton1Click:Connect(function()
+    recalculateTimeline()
+    if #Timeline.clips == 0 then
+        btnExport.Text = "Track is empty!"
+        task.delay(1.5, function() btnExport.Text = "🎬 Merge & Export" end)
+        return
+    end
+
+    exportModal.Visible = true
+    exportInfoLabel.Text = string.format("Total Clips: %d  •  Duration: %.2fs  •  Clips: %s",
+        #Timeline.clips,
+        Timeline.totalDuration,
+        Timeline.clips[1].name .. (#Timeline.clips > 1 and (" + " .. tostring(#Timeline.clips - 1) .. " more") or "")
+    )
+    exportStatus.Text = "Ready to export."
+    exportStatus.TextColor3 = C.textMuted
+end)
+
+btnCopyClipboard.MouseButton1Click:Connect(function()
+    local scriptContent, _, dur = generateMergedScript()
+    if not scriptContent then
+        exportStatus.Text = "Export failed: " .. tostring(dur)
+        exportStatus.TextColor3 = C.danger
+        return
+    end
+
+    pcall(function()
+        if setclipboard then
+            setclipboard(scriptContent)
+            exportStatus.Text = "✓ Merged script copied to clipboard!"
+            exportStatus.TextColor3 = C.green
+        else
+            exportStatus.Text = "Clipboard not supported on this executor."
+            exportStatus.TextColor3 = C.danger
+        end
+    end)
+end)
+
+btnSaveDisk.MouseButton1Click:Connect(function()
+    local scriptContent = generateMergedScript()
+    if not scriptContent then return end
+
+    local name = exportNameBox.Text:match("^%s*(.-)%s*$")
+    local finalName = (name and name ~= "") and name or ("Merged_" .. tostring(os.time()))
+
+    pcall(function()
+        if makefolder then
+            makefolder("ZenReanim")
+            makefolder("ZenReanim/Merged")
+        end
+        if writefile then
+            writefile("ZenReanim/Merged/" .. finalName .. ".lua", scriptContent)
+            exportStatus.Text = "✓ Saved to ZenReanim/Merged/" .. finalName .. ".lua"
+            exportStatus.TextColor3 = C.green
+        else
+            exportStatus.Text = "File writing not supported on this executor."
+            exportStatus.TextColor3 = C.danger
+        end
+    end)
+end)
+
+btnTestPlay.MouseButton1Click:Connect(function()
+    local scriptContent = generateMergedScript()
+    if not scriptContent then return end
+
+    if api and api.play_animation then
+        exportStatus.Text = "▶ Playing merged sequence on avatar..."
+        exportStatus.TextColor3 = C.green
+        api.play_animation(scriptContent, 1.0)
+    else
+        exportStatus.Text = "Reanimation module not active. Enable reanim first."
+        exportStatus.TextColor3 = C.danger
+    end
+end)
+
+btnAddCatalog.MouseButton1Click:Connect(function()
+    local scriptContent = generateMergedScript()
+    if not scriptContent then return end
+
+    local name = exportNameBox.Text:match("^%s*(.-)%s*$")
+    local finalName = (name and name ~= "") and name or ("Merged_" .. tostring(os.time()))
+
+    pcall(function()
+        local CONFIG_FILE = "ZenReanimConfig.json"
+        local cfg = { customAnims = {} }
+        if isfile and isfile(CONFIG_FILE) then
+            local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
+            if type(data) == "table" then cfg = data end
+        end
+        cfg.customAnims = cfg.customAnims or {}
+        table.insert(cfg.customAnims, { name = finalName, script = scriptContent })
+        if writefile then
+            writefile(CONFIG_FILE, HttpService:JSONEncode(cfg))
+        end
+
+        table.insert(animationCatalog, {
+            name = finalName,
+            path = scriptContent,
+            category = "Custom",
+            isCustom = true
+        })
+        populateMediaLibrary(libSearch.Text)
+        exportStatus.Text = "✓ Added to Zen Reanimations catalog!"
+        exportStatus.TextColor3 = C.green
+    end)
+end)
+
+print("[Zen Studio] Video Editor & Timeline Sequencer initialized successfully.")
