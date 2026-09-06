@@ -99,27 +99,61 @@ end
 
 -- Resolve joints in avatar (clone or character)
 local cachedJoints = {}
+
+local function prepareTargetChar(targetChar)
+    if not targetChar then return end
+    local hum = targetChar:FindFirstChildOfClass("Humanoid") or targetChar:FindFirstChildOfClass("AnimationController")
+    if hum then
+        pcall(function()
+            for _, track in ipairs(hum:GetPlayingAnimationTracks()) do
+                track:Stop()
+            end
+        end)
+    end
+    local animScript = targetChar:FindFirstChild("Animate")
+    if animScript then
+        animScript.Disabled = true
+    end
+end
+
 local function cacheAvatarJoints()
     table.clear(cachedJoints)
     local targetChar = (api and api.get_clone and api.get_clone()) or player.Character
     if not targetChar then return end
 
+    cachedJoints._target = targetChar
+    prepareTargetChar(targetChar)
+
     for _, desc in ipairs(targetChar:GetDescendants()) do
-        if desc:IsA("Motor6D") or desc:IsA("Weld") or desc:IsA("JointInstance") then
+        if desc:IsA("JointInstance") then
             if desc.Part1 then
                 cachedJoints[desc.Part1.Name] = desc
-            else
-                cachedJoints[desc.Name] = desc
+                cachedJoints[desc.Part1.Name:lower()] = desc
+                cachedJoints[desc.Part1.Name:gsub(" ", "")] = desc
             end
-        elseif desc:IsA("AnimationConstraint") or desc:IsA("Bone") then
+            cachedJoints[desc.Name] = desc
+            cachedJoints[desc.Name:lower()] = desc
+            cachedJoints[desc.Name:gsub(" ", "")] = desc
+        elseif desc:IsA("Bone") then
+            cachedJoints[desc.Name] = desc
+            cachedJoints[desc.Name:lower()] = desc
+        elseif desc:IsA("AnimationConstraint") then
             if desc.Part1 then
                 cachedJoints[desc.Part1.Name] = desc
-            else
-                cachedJoints[desc.Name] = desc
+                cachedJoints[desc.Part1.Name:lower()] = desc
             end
+            cachedJoints[desc.Name] = desc
+            cachedJoints[desc.Name:lower()] = desc
         end
     end
 end
+
+player.CharacterAdded:Connect(function(newChar)
+    task.wait(0.5)
+    table.clear(cachedJoints)
+    cacheAvatarJoints()
+    if updateReanimButton then updateReanimButton() end
+end)
 
 -- ══════════════════════════════════════════════════════════════════
 -- 3. ANIMATION PARSER & MEDIA REPOSITORY
@@ -259,12 +293,16 @@ local Timeline = {
     totalDuration = 0,       -- Calculated total length
     isPlaying = false,
     isLooping = true,
+    isHoldingPose = false,   -- Keeps avatar posed at current frame on Stepped
     fps = 30,
     pixelsPerSecond = 75,    -- Horizontal timeline zoom scale
     playbackConn = nil,
     startTime = 0,
     startOffset = 0,
 }
+
+local steppedConn = nil
+local setScrubberTime = nil
 
 local function recalculateTimeline()
     local accumulated = 0
@@ -281,7 +319,11 @@ end
 -- Apply exact interpolated pose to avatar joints at time T
 local function evaluateAndPoseAvatar(globalTime)
     if #Timeline.clips == 0 or Timeline.totalDuration <= 0 then return end
-    cacheAvatarJoints()
+
+    local activeChar = (api and api.get_clone and api.get_clone()) or player.Character
+    if cachedJoints._target ~= activeChar or not next(cachedJoints) then
+        cacheAvatarJoints()
+    end
     if not next(cachedJoints) then return end
 
     local clampedTime = math.clamp(globalTime, 0, Timeline.totalDuration)
@@ -331,7 +373,7 @@ local function evaluateAndPoseAvatar(globalTime)
 
     -- Apply lerped poses to all matched joints
     for boneName, poseCFrame in pairs(curFrame.Data) do
-        local joint = cachedJoints[boneName]
+        local joint = cachedJoints[boneName] or cachedJoints[boneName:gsub(" ", "")] or cachedJoints[boneName:lower()]
         if joint then
             local nextPose = nextFrame.Data and nextFrame.Data[boneName]
             local targetTransform = nextPose and poseCFrame:Lerp(nextPose, alpha) or poseCFrame
@@ -361,8 +403,8 @@ end)
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainStudioFrame"
-mainFrame.Size = UDim2.new(0, 860, 0, 540)
-mainFrame.Position = UDim2.new(0.5, -430, 0.5, -270)
+mainFrame.Size = UDim2.new(0, 880, 0, 550)
+mainFrame.Position = UDim2.new(0.5, -440, 0.5, -275)
 mainFrame.BackgroundColor3 = C.bg
 mainFrame.BorderSizePixel = 0
 mainFrame.ClipsDescendants = true
@@ -406,7 +448,7 @@ end)
 
 -- Studio Brand Title
 local titleContainer = Instance.new("Frame")
-titleContainer.Size = UDim2.new(0, 230, 1, 0)
+titleContainer.Size = UDim2.new(0, 190, 1, 0)
 titleContainer.BackgroundTransparency = 1
 titleContainer.Position = UDim2.new(0, 14, 0, 0)
 titleContainer.Parent = topBar
@@ -426,14 +468,14 @@ studioTitle.BackgroundTransparency = 1
 studioTitle.Text = "ZEN STUDIO // TIMELINE"
 studioTitle.TextColor3 = C.text
 studioTitle.Font = Enum.Font.GothamBold
-studioTitle.TextSize = 12
+studioTitle.TextSize = 11
 studioTitle.TextXAlignment = Enum.TextXAlignment.Left
 studioTitle.Parent = titleContainer
 
 -- Transport Controls Container (Centered)
 local transportFrame = Instance.new("Frame")
-transportFrame.Size = UDim2.new(0, 360, 0, 32)
-transportFrame.Position = UDim2.new(0.5, -180, 0.5, -16)
+transportFrame.Size = UDim2.new(0, 335, 0, 32)
+transportFrame.Position = UDim2.new(0.5, -168, 0.5, -16)
 transportFrame.BackgroundColor3 = C.surface
 transportFrame.Parent = topBar
 applyCorner(transportFrame, 6)
@@ -443,12 +485,12 @@ local transportLayout = Instance.new("UIListLayout")
 transportLayout.FillDirection = Enum.FillDirection.Horizontal
 transportLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 transportLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-transportLayout.Padding = UDim.new(0, 6)
+transportLayout.Padding = UDim.new(0, 5)
 transportLayout.Parent = transportFrame
 
 local function createTransportBtn(text, sizeW, tooltip)
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, sizeW or 28, 0, 24)
+    btn.Size = UDim2.new(0, sizeW or 26, 0, 24)
     btn.BackgroundColor3 = C.input
     btn.Text = text
     btn.TextColor3 = C.text
@@ -460,38 +502,95 @@ local function createTransportBtn(text, sizeW, tooltip)
     return btn
 end
 
-local btnRewind = createTransportBtn("⏮", 26, "Rewind to Start")
-local btnStepBack = createTransportBtn("◀", 26, "Step -1 Frame")
-local btnPlay = createTransportBtn("▶ PLAY", 64, "Play / Pause")
+local btnRewind = createTransportBtn("⏮", 24, "Rewind to Start")
+local btnStepBack = createTransportBtn("◀", 24, "Step -1 Frame")
+local btnPlay = createTransportBtn("▶ PLAY", 60, "Play / Pause")
 btnPlay.BackgroundColor3 = Color3.fromRGB(30, 60, 40)
 btnPlay.TextColor3 = C.green
-local btnStepFwd = createTransportBtn("▶", 26, "Step +1 Frame")
-local btnStop = createTransportBtn("⏹", 26, "Stop")
-local btnLoop = createTransportBtn("🔁 LOOP", 56, "Toggle Looping")
+local btnStepFwd = createTransportBtn("▶", 24, "Step +1 Frame")
+local btnStop = createTransportBtn("⏹", 24, "Stop")
+local btnLoop = createTransportBtn("🔁 LOOP", 54, "Toggle Looping")
 btnLoop.TextColor3 = C.green
 
 -- Timecode Readout
 local timecodeLabel = Instance.new("TextLabel")
-timecodeLabel.Size = UDim2.new(0, 95, 0, 24)
+timecodeLabel.Size = UDim2.new(0, 85, 0, 24)
 timecodeLabel.BackgroundColor3 = C.input
 timecodeLabel.Text = "00:00.00"
 timecodeLabel.TextColor3 = C.accentBlue
 timecodeLabel.Font = Enum.Font.Code
-timecodeLabel.TextSize = 11
+timecodeLabel.TextSize = 10
 timecodeLabel.Parent = transportFrame
 applyCorner(timecodeLabel, 4)
 applyStroke(timecodeLabel, C.divider, 1, 0.5)
 
--- Top Right Action Buttons: Merge & Export + Window Controls
+-- Top Right Action Buttons: Enable Reanim + Merge & Export + Window Controls
 local topRightFrame = Instance.new("Frame")
-topRightFrame.Size = UDim2.new(0, 220, 1, 0)
-topRightFrame.Position = UDim2.new(1, -225, 0, 0)
+topRightFrame.Size = UDim2.new(0, 280, 1, 0)
+topRightFrame.Position = UDim2.new(1, -285, 0, 0)
 topRightFrame.BackgroundTransparency = 1
 topRightFrame.Parent = topBar
 
+local btnToggleReanim = Instance.new("TextButton")
+btnToggleReanim.Size = UDim2.new(0, 115, 0, 28)
+btnToggleReanim.Position = UDim2.new(0, 0, 0.5, -14)
+btnToggleReanim.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+btnToggleReanim.Text = "⚡ Enable Reanim"
+btnToggleReanim.TextColor3 = C.text
+btnToggleReanim.Font = Enum.Font.GothamBold
+btnToggleReanim.TextSize = 10
+btnToggleReanim.Parent = topRightFrame
+applyCorner(btnToggleReanim, 6)
+local reanimStroke = applyStroke(btnToggleReanim, C.border, 1, 0.4)
+
+local function updateReanimButton()
+    local isRean = api and api.is_reanimated and api.is_reanimated()
+    if isRean then
+        btnToggleReanim.Text = "⚡ Reanimated"
+        btnToggleReanim.TextColor3 = C.green
+        btnToggleReanim.BackgroundColor3 = Color3.fromRGB(20, 48, 28)
+        reanimStroke.Color = Color3.fromRGB(50, 140, 70)
+    else
+        btnToggleReanim.Text = "⚡ Enable Reanim"
+        btnToggleReanim.TextColor3 = C.text
+        btnToggleReanim.BackgroundColor3 = Color3.fromRGB(24, 24, 30)
+        reanimStroke.Color = C.border
+    end
+end
+
+btnToggleReanim.MouseButton1Click:Connect(function()
+    if not (api and api.reanimate) then
+        btnToggleReanim.Text = "Module Not Loaded"
+        task.delay(1.5, updateReanimButton)
+        return
+    end
+
+    local isRean = api.is_reanimated and api.is_reanimated()
+    local newState = not isRean
+
+    btnToggleReanim.Text = newState and "Reanimating..." or "Disabling..."
+    btnToggleReanim.TextColor3 = C.textMuted
+
+    task.spawn(function()
+        local err = api.reanimate(newState)
+        if err and typeof(err) == "string" and err ~= "Already reanimated." then
+            warn("Zen Studio: " .. err)
+        end
+        updateReanimButton()
+        table.clear(cachedJoints)
+        cacheAvatarJoints()
+        if newState then
+            Timeline.isHoldingPose = true
+            setScrubberTime(Timeline.currentTime)
+        end
+    end)
+end)
+
+updateReanimButton()
+
 local btnExport = Instance.new("TextButton")
-btnExport.Size = UDim2.new(0, 130, 0, 28)
-btnExport.Position = UDim2.new(0, 0, 0.5, -14)
+btnExport.Size = UDim2.new(0, 120, 0, 28)
+btnExport.Position = UDim2.new(0, 122, 0.5, -14)
 btnExport.BackgroundColor3 = Color3.fromRGB(24, 45, 32)
 btnExport.Text = "🎬 Merge & Export"
 btnExport.TextColor3 = C.green
@@ -503,7 +602,7 @@ applyStroke(btnExport, Color3.fromRGB(40, 110, 60), 1, 0.2)
 
 local btnClose = Instance.new("TextButton")
 btnClose.Size = UDim2.new(0, 26, 0, 26)
-btnClose.Position = UDim2.new(1, -30, 0.5, -13)
+btnClose.Position = UDim2.new(1, -28, 0.5, -13)
 btnClose.BackgroundColor3 = C.surface
 btnClose.Text = "✕"
 btnClose.TextColor3 = C.textMuted
@@ -513,10 +612,25 @@ btnClose.Parent = topRightFrame
 applyCorner(btnClose, 13)
 
 btnClose.MouseButton1Click:Connect(function()
+    Timeline.isPlaying = false
+    Timeline.isHoldingPose = false
     if Timeline.playbackConn then
         Timeline.playbackConn:Disconnect()
         Timeline.playbackConn = nil
     end
+    if steppedConn then
+        steppedConn:Disconnect()
+        steppedConn = nil
+    end
+    pcall(function()
+        local targetChar = (api and api.get_clone and api.get_clone()) or player.Character
+        if targetChar then
+            local animScript = targetChar:FindFirstChild("Animate")
+            if animScript then
+                animScript.Disabled = false
+            end
+        end
+    end)
     screenGui:Destroy()
 end)
 
@@ -922,10 +1036,11 @@ emptyTrackLabel.Parent = trackLane
 local renderTimelineTrack
 local updateInspectorUI
 
-local function setScrubberTime(targetTime)
+setScrubberTime = function(targetTime)
     recalculateTimeline()
     local clamped = math.clamp(targetTime, 0, math.max(0.1, Timeline.totalDuration))
     Timeline.currentTime = clamped
+    Timeline.isHoldingPose = true
     timecodeLabel.Text = formatTime(clamped)
     playheadTimeBubble.Text = string.format("%04.1fs", clamped)
 
@@ -980,7 +1095,26 @@ local function startPlayback()
     if Timeline.isPlaying then return end
     if #Timeline.clips == 0 or Timeline.totalDuration <= 0 then return end
 
+    -- Auto-reanimate if not already reanimated so character avatar plays preview
+    if api and api.reanimate and api.is_reanimated and not api.is_reanimated() then
+        task.spawn(function()
+            local err = api.reanimate(true)
+            if err and typeof(err) == "string" and err ~= "Already reanimated." then
+                warn("Zen Studio: " .. err)
+            end
+            if updateReanimButton then updateReanimButton() end
+            table.clear(cachedJoints)
+            cacheAvatarJoints()
+        end)
+    end
+
+    -- Stop any competing animation loop on the module
+    if api and api.stop_animation then
+        pcall(function() api.stop_animation() end)
+    end
+
     Timeline.isPlaying = true
+    Timeline.isHoldingPose = true
     Timeline.startTime = tick()
     Timeline.startOffset = Timeline.currentTime
 
@@ -1050,6 +1184,14 @@ UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe then return end
     if input.KeyCode == Enum.KeyCode.Space then
         if Timeline.isPlaying then stopPlayback() else startPlayback() end
+    end
+end)
+
+-- Continuous Stepped Connection for Smooth Avatar Joint Posing
+if steppedConn then steppedConn:Disconnect() end
+steppedConn = RunService.Stepped:Connect(function()
+    if Timeline.isPlaying or isScrubbing or Timeline.isHoldingPose then
+        evaluateAndPoseAvatar(Timeline.currentTime)
     end
 end)
 
@@ -1418,6 +1560,7 @@ local function populateMediaLibrary(filterText)
                         Timeline.selectedClipIndex = #Timeline.clips
                         updateInspectorUI()
                         renderTimelineTrack()
+                        setScrubberTime(Timeline.currentTime)
                         btnAdd.Text = "Added!"
                         task.delay(1, function() btnAdd.Text = "+ Track" end)
                     else
