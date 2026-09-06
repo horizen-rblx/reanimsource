@@ -346,7 +346,7 @@ end)
 -- ═══════════════════════════════════════════════════
 -- 5. 7 UNIFIED TABS SEGMENTED BAR
 -- ═══════════════════════════════════════════════════
-local tabNames = { "Reanims", "Favs", "Binds", "States", "Speed", "Limbs", "Record" }
+local tabNames = { "Reanims", "Favs", "Custom", "Binds", "States", "Speed", "Limbs" }
 local tabButtons = {}
 
 local tabsFrame = Instance.new("ScrollingFrame")
@@ -562,6 +562,17 @@ emptyFavsLabel.Font = Enum.Font.GothamMedium
 emptyFavsLabel.TextSize = 11
 emptyFavsLabel.Visible = false
 emptyFavsLabel.Parent = listPanel
+
+local emptyCustomLabel = Instance.new("TextLabel")
+emptyCustomLabel.Size = UDim2.new(1, 0, 0, 60)
+emptyCustomLabel.Position = UDim2.new(0, 0, 0.3, 0)
+emptyCustomLabel.BackgroundTransparency = 1
+emptyCustomLabel.Text = "No custom animations added yet.\nClick [+ Add Custom] above to paste and import animations!"
+emptyCustomLabel.TextColor3 = C.textMuted
+emptyCustomLabel.Font = Enum.Font.GothamMedium
+emptyCustomLabel.TextSize = 11
+emptyCustomLabel.Visible = false
+emptyCustomLabel.Parent = listPanel
 
 -- PANEL 2: BINDS PANEL
 local bindsPanel = Instance.new("ScrollingFrame")
@@ -1501,407 +1512,6 @@ end)
 
 limbsPanel.CanvasSize = UDim2.new(0, 0, 0, #limbDefinitions * 56 + 80)
 
--- PANEL 6: RECORD TAB (AnimRecorder Studio)
-local recordPanel = Instance.new("ScrollingFrame")
-recordPanel.Size = UDim2.new(1, 0, 1, 0)
-recordPanel.BackgroundTransparency = 1
-recordPanel.BorderSizePixel = 0
-recordPanel.ScrollBarThickness = 3
-recordPanel.ScrollBarImageColor3 = C.accent
-recordPanel.ScrollBarImageTransparency = 0.6
-recordPanel.Visible = false
-recordPanel.Parent = contentArea
-
-local recordLayout = Instance.new("UIListLayout")
-recordLayout.Padding = UDim.new(0, 8)
-recordLayout.SortOrder = Enum.SortOrder.LayoutOrder
-recordLayout.Parent = recordPanel
-
-local AnimRecorder = {
-    isRecording = false,
-    recordedFrames = {},
-    startTime = 0,
-    recordingConn = nil,
-    lastRecordedTime = 0,
-    frameInterval = 1/30,
-}
-
--- Recorder Studio Card
-local recStudio = Instance.new("Frame")
-recStudio.Size = UDim2.new(1, 0, 0, 110)
-recStudio.BackgroundColor3 = C.bgCard
-recStudio.Parent = recordPanel
-applyCorner(recStudio, 8)
-local recStudioStroke = applyStroke(recStudio, C.divider, 1.2, 0)
-
--- Header Status inside Studio
-local recHeaderFrame = Instance.new("Frame")
-recHeaderFrame.Size = UDim2.new(1, -20, 0, 24)
-recHeaderFrame.Position = UDim2.new(0, 10, 0, 10)
-recHeaderFrame.BackgroundTransparency = 1
-recHeaderFrame.Parent = recStudio
-
-local recStatusDot = Instance.new("Frame")
-recStatusDot.Size = UDim2.new(0, 8, 0, 8)
-recStatusDot.Position = UDim2.new(0, 2, 0.5, -4)
-recStatusDot.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
-recStatusDot.Parent = recHeaderFrame
-applyCorner(recStatusDot, 4)
-
-local recStatusText = Instance.new("TextLabel")
-recStatusText.Size = UDim2.new(0, 110, 1, 0)
-recStatusText.Position = UDim2.new(0, 16, 0, 0)
-recStatusText.BackgroundTransparency = 1
-recStatusText.Text = "STANDBY"
-recStatusText.TextColor3 = C.textMuted
-recStatusText.Font = Enum.Font.GothamBold
-recStatusText.TextSize = 10
-recStatusText.TextXAlignment = Enum.TextXAlignment.Left
-recStatusText.Parent = recHeaderFrame
-
-local recTimerLabel = Instance.new("TextLabel")
-recTimerLabel.Size = UDim2.new(0, 80, 1, 0)
-recTimerLabel.Position = UDim2.new(1, -150, 0, 0)
-recTimerLabel.BackgroundTransparency = 1
-recTimerLabel.Text = "00:00.0"
-recTimerLabel.TextColor3 = C.accent
-recTimerLabel.Font = Enum.Font.GothamBold
-recTimerLabel.TextSize = 12
-recTimerLabel.TextXAlignment = Enum.TextXAlignment.Right
-recTimerLabel.Parent = recHeaderFrame
-
-local recFrameCounter = Instance.new("TextLabel")
-recFrameCounter.Size = UDim2.new(0, 65, 1, 0)
-recFrameCounter.Position = UDim2.new(1, -65, 0, 0)
-recFrameCounter.BackgroundTransparency = 1
-recFrameCounter.Text = "0 frames"
-recFrameCounter.TextColor3 = C.textMuted
-recFrameCounter.Font = Enum.Font.GothamMedium
-recFrameCounter.TextSize = 10
-recFrameCounter.TextXAlignment = Enum.TextXAlignment.Right
-recFrameCounter.Parent = recHeaderFrame
-
--- Big Action Button (Start / Stop)
-local recActionBtn = Instance.new("TextButton")
-recActionBtn.Size = UDim2.new(1, -20, 0, 36)
-recActionBtn.Position = UDim2.new(0, 10, 0, 42)
-recActionBtn.BackgroundColor3 = C.surface
-recActionBtn.Text = "START RECORDING (30 FPS)"
-recActionBtn.TextColor3 = C.text
-recActionBtn.Font = Enum.Font.GothamBold
-recActionBtn.TextSize = 11
-recActionBtn.Parent = recStudio
-applyCorner(recActionBtn, 6)
-local recActionStroke = applyStroke(recActionBtn, C.border, 1, 0)
-
--- Bottom Help Note in Studio
-local recHint = Instance.new("TextLabel")
-recHint.Size = UDim2.new(1, -20, 0, 16)
-recHint.Position = UDim2.new(0, 10, 0, 84)
-recHint.BackgroundTransparency = 1
-recHint.Text = "Captures Motor6D & constraint transforms in real-time. Auto-saves to file and clipboard."
-recHint.TextColor3 = C.textMuted
-recHint.Font = Enum.Font.Gotham
-recHint.TextSize = 9
-recHint.TextXAlignment = Enum.TextXAlignment.Left
-recHint.Parent = recStudio
-
--- Recordings List Header
-local recListHeader = Instance.new("TextLabel")
-recListHeader.Size = UDim2.new(1, 0, 0, 20)
-recListHeader.BackgroundTransparency = 1
-recListHeader.Text = "SAVED RECORDINGS"
-recListHeader.TextColor3 = C.textMuted
-recListHeader.Font = Enum.Font.GothamBold
-recListHeader.TextSize = 10
-recListHeader.TextXAlignment = Enum.TextXAlignment.Left
-recListHeader.Parent = recordPanel
-
-local recScrollList = Instance.new("Frame")
-recScrollList.Size = UDim2.new(1, 0, 0, 100)
-recScrollList.BackgroundTransparency = 1
-recScrollList.Parent = recordPanel
-
-local recListLayout = Instance.new("UIListLayout")
-recListLayout.Padding = UDim.new(0, 6)
-recListLayout.SortOrder = Enum.SortOrder.LayoutOrder
-recListLayout.Parent = recScrollList
-
-local function getCloneConstraints()
-    local clone = api and api.get_clone and api.get_clone()
-    if not clone then return nil end
-
-    local constraints = {}
-    for _, descendant in ipairs(clone:GetDescendants()) do
-        if descendant:IsA("AnimationConstraint") then
-            local attachment = descendant.Attachment1
-            if attachment and attachment.Parent then
-                constraints[attachment.Parent.Name] = descendant
-            end
-        elseif descendant:IsA("Motor6D") then
-            local childPart = descendant.Part1
-            if childPart and childPart.Parent and not constraints[childPart.Name] then
-                constraints[childPart.Name] = descendant
-            end
-        end
-    end
-    return constraints
-end
-
-local populateRecordingsList
-
-local function stopRecording()
-    if not AnimRecorder.isRecording then return end
-    AnimRecorder.isRecording = false
-
-    if AnimRecorder.recordingConn then
-        AnimRecorder.recordingConn:Disconnect()
-        AnimRecorder.recordingConn = nil
-    end
-
-    recStatusDot.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
-    recStatusText.Text = "STANDBY"
-    recStatusText.TextColor3 = C.textMuted
-    recActionBtn.Text = "START RECORDING (30 FPS)"
-    recActionBtn.TextColor3 = C.text
-    recActionBtn.BackgroundColor3 = C.surface
-    recActionStroke.Color = C.border
-    recStudioStroke.Color = C.divider
-
-    local frameCount = #AnimRecorder.recordedFrames
-    if frameCount == 0 then return end
-
-    task.spawn(function()
-        local recordedFrames = AnimRecorder.recordedFrames
-        local totalDuration = recordedFrames[#recordedFrames].Time
-        local stamp = tostring(os.time())
-        local animName = "Recorded_" .. stamp
-
-        local outputParts = {}
-        table.insert(outputParts, "-- " .. tostring(frameCount) .. " keyframes\n")
-        table.insert(outputParts, "-- " .. string.format("%.3f", totalDuration) .. " seconds\n")
-        table.insert(outputParts, "return {\n")
-        table.insert(outputParts, '  ["Animation"] = {\n')
-
-        local yieldEvery = 50
-        for i, frame in ipairs(recordedFrames) do
-            local frameStr = "    {Time = " .. string.format("%.3f", frame.Time) .. ", Data = {\n"
-            for boneName, cf in pairs(frame.Data) do
-                local comps = {cf:GetComponents()}
-                local compStrs = {}
-                for j = 1, 12 do
-                    compStrs[j] = string.format("%.6f", comps[j])
-                end
-                frameStr = frameStr .. '      ["' .. boneName .. '"] = CFrame.new(' .. table.concat(compStrs, ", ") .. '),\n'
-            end
-            frameStr = frameStr .. "    }},\n"
-            table.insert(outputParts, frameStr)
-
-            if i % yieldEvery == 0 then
-                task.wait()
-            end
-        end
-
-        table.insert(outputParts, "  }\n")
-        table.insert(outputParts, "}\n")
-        local output = table.concat(outputParts)
-
-        pcall(function()
-            if makefolder then makefolder("ZenReanim") makefolder("ZenReanim/Recordings") end
-            if writefile then writefile("ZenReanim/Recordings/" .. animName .. ".lua", output) end
-        end)
-
-        pcall(function()
-            if setclipboard then setclipboard(output) end
-        end)
-
-        table.insert(savedConfig.customAnims, { name = animName, script = output })
-        saveConfig()
-
-        table.insert(animations, {
-            name = animName,
-            path = output,
-            category = "Recorded",
-            isCustom = true
-        })
-
-        table.sort(animations, function(a, b) return a.name:lower() < b.name:lower() end)
-        populateList()
-        populateRecordingsList()
-    end)
-end
-
-function populateRecordingsList()
-    for _, c in ipairs(recScrollList:GetChildren()) do
-        if c:IsA("Frame") then c:Destroy() end
-    end
-
-    local recCount = 0
-    for _, a in ipairs(animations) do
-        if a.category == "Recorded" or (a.isCustom and a.name:find("^Recorded_")) then
-            recCount = recCount + 1
-            local rCard = Instance.new("Frame")
-            rCard.Size = UDim2.new(1, 0, 0, 36)
-            rCard.BackgroundColor3 = C.bgCard
-            rCard.Parent = recScrollList
-            applyCorner(rCard, 6)
-            applyStroke(rCard, C.divider, 1, 0)
-
-            local rName = Instance.new("TextLabel")
-            rName.Size = UDim2.new(1, -160, 1, 0)
-            rName.Position = UDim2.new(0, 10, 0, 0)
-            rName.BackgroundTransparency = 1
-            rName.Text = a.name
-            rName.TextColor3 = C.text
-            rName.Font = Enum.Font.GothamMedium
-            rName.TextSize = 11
-            rName.TextXAlignment = Enum.TextXAlignment.Left
-            rName.Parent = rCard
-
-            local rPlayBtn = Instance.new("TextButton")
-            rPlayBtn.Size = UDim2.new(0, 48, 0, 24)
-            rPlayBtn.Position = UDim2.new(1, -150, 0.5, -12)
-            rPlayBtn.BackgroundColor3 = Color3.fromRGB(24, 40, 30)
-            rPlayBtn.Text = "Play"
-            rPlayBtn.TextColor3 = C.green
-            rPlayBtn.Font = Enum.Font.GothamBold
-            rPlayBtn.TextSize = 10
-            rPlayBtn.Parent = rCard
-            applyCorner(rPlayBtn, 4)
-
-            rPlayBtn.MouseButton1Click:Connect(function()
-                playSelectedAnimation(a)
-            end)
-
-            local rCopyBtn = Instance.new("TextButton")
-            rCopyBtn.Size = UDim2.new(0, 48, 0, 24)
-            rCopyBtn.Position = UDim2.new(1, -98, 0.5, -12)
-            rCopyBtn.BackgroundColor3 = C.surface
-            rCopyBtn.Text = "Copy"
-            rCopyBtn.TextColor3 = C.accent
-            rCopyBtn.Font = Enum.Font.GothamMedium
-            rCopyBtn.TextSize = 10
-            rCopyBtn.Parent = rCard
-            applyCorner(rCopyBtn, 4)
-
-            rCopyBtn.MouseButton1Click:Connect(function()
-                pcall(function()
-                    if setclipboard then setclipboard(a.path) end
-                    rCopyBtn.Text = "Copied!"
-                    task.delay(1.5, function() rCopyBtn.Text = "Copy" end)
-                end)
-            end)
-
-            local rDelBtn = Instance.new("TextButton")
-            rDelBtn.Size = UDim2.new(0, 44, 0, 24)
-            rDelBtn.Position = UDim2.new(1, -46, 0.5, -12)
-            rDelBtn.BackgroundColor3 = C.surface
-            rDelBtn.Text = "Del"
-            rDelBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
-            rDelBtn.Font = Enum.Font.GothamMedium
-            rDelBtn.TextSize = 10
-            rDelBtn.Parent = rCard
-            applyCorner(rDelBtn, 4)
-
-            rDelBtn.MouseButton1Click:Connect(function()
-                for idx, ca in ipairs(savedConfig.customAnims) do
-                    if ca.name == a.name then
-                        table.remove(savedConfig.customAnims, idx)
-                        break
-                    end
-                end
-                saveConfig()
-                for idx, anim in ipairs(animations) do
-                    if anim.name == a.name then
-                        table.remove(animations, idx)
-                        break
-                    end
-                end
-                populateList()
-                populateRecordingsList()
-            end)
-        end
-    end
-
-    recScrollList.Size = UDim2.new(1, 0, 0, math.max(10, recCount * 42))
-    recordPanel.CanvasSize = UDim2.new(0, 0, 0, 180 + recScrollList.Size.Y.Offset)
-end
-
-local function startRecording()
-    if AnimRecorder.isRecording then return end
-    if not (api and api.is_reanimated and api.is_reanimated()) then
-        warn("Zen Reanimations: Enable reanimation first to record animations!")
-        return
-    end
-
-    AnimRecorder.isRecording = true
-    AnimRecorder.recordedFrames = {}
-    AnimRecorder.startTime = tick()
-    AnimRecorder.lastRecordedTime = 0
-
-    recStatusDot.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
-    recStatusText.Text = "RECORDING"
-    recStatusText.TextColor3 = Color3.fromRGB(255, 90, 90)
-    recActionBtn.Text = "STOP & SAVE RECORDING"
-    recActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    recActionBtn.BackgroundColor3 = Color3.fromRGB(50, 18, 22)
-    recActionStroke.Color = Color3.fromRGB(255, 60, 90)
-    recStudioStroke.Color = Color3.fromRGB(180, 50, 70)
-
-    AnimRecorder.recordingConn = RunService.Heartbeat:Connect(function()
-        if not AnimRecorder.isRecording then return end
-        local elapsed = tick() - AnimRecorder.startTime
-        if elapsed - AnimRecorder.lastRecordedTime < AnimRecorder.frameInterval then return end
-        AnimRecorder.lastRecordedTime = elapsed
-
-        local mins = math.floor(elapsed / 60)
-        local secs = elapsed % 60
-        recTimerLabel.Text = string.format("%02d:%04.1f", mins, secs)
-        recFrameCounter.Text = tostring(#AnimRecorder.recordedFrames) .. " frames"
-
-        local constraints = getCloneConstraints()
-        if not constraints then return end
-
-        local frameData = {}
-        for boneName, constraint in pairs(constraints) do
-            if constraint and constraint.Parent then
-                if constraint:IsA("Motor6D") then
-                    local p0 = constraint.Part0
-                    local p1 = constraint.Part1
-                    if p0 and p1 and p0.Parent and p1.Parent then
-                        frameData[boneName] = p0.CFrame * constraint.C0:Inverse() * constraint.C1:Inverse() * p1.CFrame
-                    else
-                        frameData[boneName] = constraint.Transform
-                    end
-                else
-                    local att0 = constraint.Attachment0
-                    local att1 = constraint.Attachment1
-                    if att0 and att1 and att0.Parent and att1.Parent then
-                        local w0 = att0.Parent.CFrame * att0.CFrame
-                        local w1 = att1.Parent.CFrame * att1.CFrame
-                        frameData[boneName] = w0:Inverse() * w1
-                    else
-                        frameData[boneName] = constraint.Transform
-                    end
-                end
-            end
-        end
-        table.insert(AnimRecorder.recordedFrames, { Time = elapsed, Data = frameData })
-    end)
-end
-
-recActionBtn.MouseButton1Click:Connect(function()
-    if AnimRecorder.isRecording then
-        stopRecording()
-    else
-        startRecording()
-    end
-end)
-
-local function updateRecordUI()
-    populateRecordingsList()
-    recordPanel.CanvasSize = UDim2.new(0, 0, 0, 170 + recScrollList.AbsoluteSize.Y)
-end
 
 -- ═══════════════════════════════════════════════════
 -- 9. REANIMS & FAVS LIST ENGINE (Fast Virtualized)
@@ -1941,8 +1551,15 @@ local function populateList()
     local displayList = {}
 
     for _, a in ipairs(animations) do
+        local isCustomAnim = a.isCustom or (a.category == "Custom") or (a.category == "Recorded")
         if currentTab == "Favs" then
             if savedConfig.favs[a.name] then
+                if term == "" or a.name:lower():find(term, 1, true) then
+                    table.insert(displayList, a)
+                end
+            end
+        elseif currentTab == "Custom" then
+            if isCustomAnim then
                 if term == "" or a.name:lower():find(term, 1, true) then
                     table.insert(displayList, a)
                 end
@@ -1956,8 +1573,13 @@ local function populateList()
 
     if currentTab == "Favs" then
         emptyFavsLabel.Visible = (#displayList == 0)
+        emptyCustomLabel.Visible = false
+    elseif currentTab == "Custom" then
+        emptyFavsLabel.Visible = false
+        emptyCustomLabel.Visible = (#displayList == 0)
     else
         emptyFavsLabel.Visible = false
+        emptyCustomLabel.Visible = false
     end
 
     for i, anim in ipairs(displayList) do
@@ -2232,21 +1854,32 @@ local function switchTab(tab)
         data.stroke.Transparency = isActive and 0.4 or 1
     end
 
-    listPanel.Visible   = (tab == "Reanims" or tab == "Favs")
+    local isAnimListTab = (tab == "Reanims" or tab == "Favs" or tab == "Custom")
+    listPanel.Visible   = isAnimListTab
     bindsPanel.Visible  = (tab == "Binds")
     speedPanel.Visible  = (tab == "Speed")
     statesPanel.Visible = (tab == "States")
     limbsPanel.Visible  = (tab == "Limbs")
-    recordPanel.Visible = (tab == "Record")
 
-    if tab == "Reanims" or tab == "Favs" then
+    if isAnimListTab then
+        if tab == "Favs" then
+            searchBox.PlaceholderText = "Search favorites..."
+            addCustomBtn.Visible = false
+            searchBox.Size = UDim2.new(1, 0, 0, 32)
+        elseif tab == "Custom" then
+            searchBox.PlaceholderText = "Search custom animations..."
+            addCustomBtn.Visible = true
+            searchBox.Size = UDim2.new(1, -104, 0, 32)
+        else
+            searchBox.PlaceholderText = "Search animations..."
+            addCustomBtn.Visible = true
+            searchBox.Size = UDim2.new(1, -104, 0, 32)
+        end
         populateList()
     elseif tab == "Binds" then
         populateBindsList()
     elseif tab == "Limbs" then
         updateLimbsUI()
-    elseif tab == "Record" then
-        updateRecordUI()
     end
 end
 
