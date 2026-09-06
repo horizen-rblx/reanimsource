@@ -186,6 +186,7 @@ local titleBar = Instance.new("Frame")
 titleBar.Size = UDim2.new(1, 0, 0, 48)
 titleBar.BackgroundColor3 = C.bg
 titleBar.BorderSizePixel = 0
+titleBar.ZIndex = 20
 titleBar.Parent = mainFrame
 applyCorner(titleBar, 12)
 
@@ -194,12 +195,14 @@ titleDivider.Size = UDim2.new(1, 0, 0, 1)
 titleDivider.Position = UDim2.new(0, 0, 1, -1)
 titleDivider.BackgroundColor3 = C.divider
 titleDivider.BorderSizePixel = 0
+titleDivider.ZIndex = 20
 titleDivider.Parent = titleBar
 
 local macBtns = Instance.new("Frame")
 macBtns.Size = UDim2.new(0, 50, 1, 0)
 macBtns.Position = UDim2.new(0, 14, 0, 0)
 macBtns.BackgroundTransparency = 1
+macBtns.ZIndex = 21
 macBtns.Parent = titleBar
 
 local closeBtn = Instance.new("TextButton")
@@ -207,6 +210,7 @@ closeBtn.Size = UDim2.new(0, 12, 0, 12)
 closeBtn.Position = UDim2.new(0, 0, 0.5, -6)
 closeBtn.BackgroundColor3 = Color3.fromRGB(255, 90, 90)
 closeBtn.Text = ""
+closeBtn.ZIndex = 22
 closeBtn.Parent = macBtns
 applyCorner(closeBtn, 6)
 
@@ -215,6 +219,7 @@ minBtn.Size = UDim2.new(0, 12, 0, 12)
 minBtn.Position = UDim2.new(0, 18, 0.5, -6)
 minBtn.BackgroundColor3 = Color3.fromRGB(255, 190, 60)
 minBtn.Text = ""
+minBtn.ZIndex = 22
 minBtn.Parent = macBtns
 applyCorner(minBtn, 6)
 
@@ -228,6 +233,7 @@ titleText.TextColor3 = C.text
 titleText.TextSize = 13
 titleText.Font = Enum.Font.GothamBold
 titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.ZIndex = 21
 titleText.Parent = titleBar
 
 -- Enable / Disable Reanimation Capsule Button
@@ -239,21 +245,46 @@ toggleBtn.Text = "Enable Reanim"
 toggleBtn.TextColor3 = C.text
 toggleBtn.Font = Enum.Font.GothamBold
 toggleBtn.TextSize = 11
+toggleBtn.ZIndex = 21
 toggleBtn.Parent = titleBar
 applyCorner(toggleBtn, 14)
 local toggleStroke = applyStroke(toggleBtn, C.border, 1, 0.4)
 
+-- Body Container (houses tabs, page content, and now playing bar; hidden during minimize)
+local bodyContainer = Instance.new("Frame")
+bodyContainer.Name = "BodyContainer"
+bodyContainer.Size = UDim2.new(1, 0, 1, -48)
+bodyContainer.Position = UDim2.new(0, 0, 0, 48)
+bodyContainer.BackgroundTransparency = 1
+bodyContainer.ClipsDescendants = true
+bodyContainer.Parent = mainFrame
+
+local modalOverlay = nil
 local isMinimized = false
-minBtn.MouseEnter:Connect(function() tween(minBtn, {BackgroundColor3 = Color3.fromRGB(255, 220, 100)}, 0.15) end)
-minBtn.MouseLeave:Connect(function() tween(minBtn, {BackgroundColor3 = Color3.fromRGB(255, 190, 60)}, 0.15) end)
-minBtn.MouseButton1Click:Connect(function()
+
+local function toggleMinimize()
     isMinimized = not isMinimized
     if isMinimized then
-        tween(mainFrame, {Size = UDim2.new(0, 440, 0, 48)}, 0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+        bodyContainer.Visible = false
+        titleDivider.Visible = false
+        if modalOverlay then
+            modalOverlay.Visible = false
+        end
+        tween(mainFrame, {Size = UDim2.new(0, 440, 0, 48)}, 0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
     else
-        tween(mainFrame, {Size = UDim2.new(0, 440, 0, 540)}, 0.3, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+        titleDivider.Visible = true
+        tween(mainFrame, {Size = UDim2.new(0, 440, 0, 540)}, 0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+        task.delay(0.12, function()
+            if not isMinimized then
+                bodyContainer.Visible = true
+            end
+        end)
     end
-end)
+end
+
+minBtn.MouseEnter:Connect(function() tween(minBtn, {BackgroundColor3 = Color3.fromRGB(255, 220, 100)}, 0.15) end)
+minBtn.MouseLeave:Connect(function() tween(minBtn, {BackgroundColor3 = Color3.fromRGB(255, 190, 60)}, 0.15) end)
+minBtn.MouseButton1Click:Connect(toggleMinimize)
 
 closeBtn.MouseEnter:Connect(function() tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(255, 130, 130)}, 0.15) end)
 closeBtn.MouseLeave:Connect(function() tween(closeBtn, {BackgroundColor3 = Color3.fromRGB(255, 90, 90)}, 0.15) end)
@@ -290,9 +321,9 @@ local tabButtons = {}
 
 local tabsFrame = Instance.new("Frame")
 tabsFrame.Size = UDim2.new(1, -28, 0, 32)
-tabsFrame.Position = UDim2.new(0, 14, 0, 56)
+tabsFrame.Position = UDim2.new(0, 14, 0, 8)
 tabsFrame.BackgroundColor3 = C.input
-tabsFrame.Parent = mainFrame
+tabsFrame.Parent = bodyContainer
 applyCorner(tabsFrame, 7)
 applyStroke(tabsFrame, C.divider, 1, 0)
 
@@ -330,7 +361,7 @@ npBar.Position = UDim2.new(0, 14, 1, -38)
 npBar.BackgroundColor3 = C.surface
 npBar.BorderSizePixel = 0
 npBar.ZIndex = 15
-npBar.Parent = mainFrame
+npBar.Parent = bodyContainer
 applyCorner(npBar, 7)
 local npStroke = applyStroke(npBar, C.divider, 1, 0.3)
 
@@ -420,10 +451,10 @@ end)
 -- 7. TAB PANELS CONTAINER
 -- ═══════════════════════════════════════════════════
 local contentArea = Instance.new("Frame")
-contentArea.Size = UDim2.new(1, -28, 1, -138)
-contentArea.Position = UDim2.new(0, 14, 0, 94)
+contentArea.Size = UDim2.new(1, -28, 1, -90)
+contentArea.Position = UDim2.new(0, 14, 0, 46)
 contentArea.BackgroundTransparency = 1
-contentArea.Parent = mainFrame
+contentArea.Parent = bodyContainer
 
 -- PANEL 1: REANIMS & FAVS (Shares animation virtual list)
 local listPanel = Instance.new("Frame")
@@ -768,7 +799,7 @@ local modalSelectingState = nil
 -- ═══════════════════════════════════════════════════
 -- 8. ANIMATION SELECTOR MODAL (For States Tab)
 -- ═══════════════════════════════════════════════════
-local modalOverlay = Instance.new("Frame")
+modalOverlay = Instance.new("Frame")
 modalOverlay.Size = UDim2.new(1, 0, 1, 0)
 modalOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
 modalOverlay.BackgroundTransparency = 0.4
