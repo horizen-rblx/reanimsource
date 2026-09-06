@@ -316,40 +316,36 @@ local function recalculateTimeline()
     Timeline.totalDuration = accumulated
 end
 
--- Apply exact interpolated pose to avatar joints at time T
-local function evaluateAndPoseAvatar(globalTime)
-    if #Timeline.clips == 0 or Timeline.totalDuration <= 0 then return end
+-- ══════════════════════════════════════════════════════════════════
+-- 4.5 TRANSITION ENGINE (PRESTIGEX SMOOTH ANIMATION SWITCHING)
+-- ══════════════════════════════════════════════════════════════════
+local TRANSITION_PRESETS = {
+    None   = { duration = 0.00, easing = "linear",       label = "Cut (None)" },
+    Quick  = { duration = 0.12, easing = "smoothstep",   label = "Quick (0.12s)" },
+    Smooth = { duration = 0.22, easing = "smootherstep", label = "Smooth (0.22s)" },
+    Flow   = { duration = 0.34, easing = "sine",         label = "Flow (0.34s)" },
+    Soft   = { duration = 0.48, easing = "smootherstep", label = "Soft (0.48s)" },
+}
 
-    local activeChar = (api and api.get_clone and api.get_clone()) or player.Character
-    if cachedJoints._target ~= activeChar or not next(cachedJoints) then
-        cacheAvatarJoints()
+local function easeTransition(easing, t)
+    t = math.clamp(tonumber(t) or 1, 0, 1)
+    if easing == "sine" then
+        return 0.5 - 0.5 * math.cos(math.pi * t)
+    elseif easing == "smoothstep" then
+        return t * t * (3 - 2 * t)
+    elseif easing == "smootherstep" then
+        -- Ken Perlin's quintic smootherstep polynomial (PrestigeX)
+        return t * t * t * (t * (t * 6 - 15) + 10)
     end
-    if not next(cachedJoints) then return end
+    return t
+end
 
-    local clampedTime = math.clamp(globalTime, 0, Timeline.totalDuration)
-
-    -- Identify active clip
-    local activeClip = nil
-    for _, clip in ipairs(Timeline.clips) do
-        if clampedTime >= clip.timelineStart and clampedTime <= clip.timelineEnd then
-            activeClip = clip
-            break
-        end
-    end
-
-    if not activeClip then
-        activeClip = Timeline.clips[#Timeline.clips]
-    end
-
-    if not (activeClip and activeClip.keyframes and #activeClip.keyframes > 0) then return end
-
-    -- Convert global timeline time to local clip keyframe time
-    local localElapsed = (clampedTime - activeClip.timelineStart) * activeClip.speed
-    local targetKeyTime = activeClip.trimStart + localElapsed
-    local kfs = activeClip.keyframes
+-- Samples keyframe pose for a clip at a specific local keyframe time
+local function sampleClipPose(clip, targetKeyTime)
+    local kfs = clip and clip.keyframes
+    if not kfs or #kfs == 0 then return {} end
     local count = #kfs
 
-    -- Binary search for keyframes
     local low, high = 1, count
     local curIdx = 1
     while low <= high do
@@ -371,13 +367,110 @@ local function evaluateAndPoseAvatar(globalTime)
         alpha = math.clamp((targetKeyTime - curFrame.Time) / span, 0, 1)
     end
 
-    -- Apply lerped poses to all matched joints
-    for boneName, poseCFrame in pairs(curFrame.Data) do
+    local pose = {}
+    for boneName, cf in pairs(curFrame.Data) do
+        local nextPose = nextFrame.Data and nextFrame.Data[boneName]
+        pose[boneName] = nextPose and cf:Lerp(nextPose, alpha) or cf
+    end
+    return pose
+end
+
+-- Adaptive transition duration based on rotation & translation delta between poses (PrestigeX)
+local function resolveAdaptiveTransitionDuration(outgoingPose, incomingPose, baseDuration)
+    baseDuration = tonumber(baseDuration) or 0.22
+    if baseDuration <= 0 then return 0 end
+    local maxDiff = 0
+    for bone, cfA in pairs(outgoingPose or {}) do
+        local cfB = incomingPose and incomingPose[bone]
+        if cfA and cfB then
+            local delta = cfA:ToObjectSpace(cfB)
+            local okAxis, _, angle = pcall(function() return delta:ToAxisAngle() end)
+            local rotScore = okAxis and math.clamp(math.abs(tonumber(angle) or 0) / math.pi, 0, 1) or 0
+            local posScore = math.clamp(delta.Position.Magnitude / 2.5, 0, 1)
+            maxDiff = math.max(maxDiff, rotScore, posScore)
+        end
+    end
+    return math.clamp(baseDuration * (0.72 + maxDiff * 0.72), 0.08, 0.70)
+end
+
+-- Apply exact interpolated pose to avatar joints at time T with PrestigeX smooth transitions
+local function evaluateAndPoseAvatar(globalTime)
+    if #Timeline.clips == 0 or Timeline.totalDuration <= 0 then return end
+
+    local activeChar = (api and api.get_clone and api.get_clone()) or player.Character
+    if cachedJoints._target ~= activeChar or not next(cachedJoints) then
+        cacheAvatarJoints()
+    end
+    if not next(cachedJoints) then return end
+
+    local clampedTime = math.clamp(globalTime, 0, Timeline.totalDuration)
+
+    -- Identify active clip index
+    local activeIdx = 1
+    for i, clip in ipairs(Timeline.clips) do
+        if clampedTime >= clip.timelineStart and clampedTime <= clip.timelineEnd then
+            activeIdx = i
+            break
+        end
+    end
+
+    local activeClip = Timeline.clips[activeIdx] or Timeline.clips[#Timeline.clips]
+    if not (activeClip and activeClip.keyframes and #activeClip.keyframes > 0) then return end
+
+    -- Check if we are in transition blending window between previous clip and active clip
+    local targetPose = nil
+    if activeIdx > 1 then
+        local prevClip = Timeline.clips[activeIdx - 1]
+        local tr = activeClip.transition
+        local trDuration = tr and tr.enabled and tonumber(tr.duration) or 0
+
+        if trDuration > 0 and prevClip and prevClip.keyframes and #prevClip.keyframes > 0 then
+            local maxAllowed = math.min(activeClip.duration * 0.9, prevClip.duration * 0.9)
+            local baseDur = math.min(trDuration, maxAllowed)
+            local elapsedInClip = clampedTime - activeClip.timelineStart
+
+            if elapsedInClip >= 0 and elapsedInClip < baseDur then
+                -- Sample outgoing pose at end of previous clip
+                local outgoingPose = sampleClipPose(prevClip, prevClip.trimEnd)
+                -- Sample incoming pose at current time in active clip
+                local localElapsed = elapsedInClip * activeClip.speed
+                local incomingKeyTime = activeClip.trimStart + localElapsed
+                local incomingPose = sampleClipPose(activeClip, incomingKeyTime)
+
+                local effDuration = baseDur
+                if tr.adaptive ~= false then
+                    effDuration = math.min(resolveAdaptiveTransitionDuration(outgoingPose, incomingPose, baseDur), maxAllowed)
+                end
+
+                local progress = math.clamp(elapsedInClip / math.max(effDuration, 0.001), 0, 1)
+                local blendAlpha = easeTransition(tr.easing or "smootherstep", progress)
+
+                targetPose = {}
+                for bone, inCf in pairs(incomingPose) do
+                    local outCf = outgoingPose[bone]
+                    targetPose[bone] = outCf and outCf:Lerp(inCf, blendAlpha) or inCf
+                end
+                for bone, outCf in pairs(outgoingPose) do
+                    if not targetPose[bone] then
+                        targetPose[bone] = outCf
+                    end
+                end
+            end
+        end
+    end
+
+    -- If not in transition window, evaluate active clip directly
+    if not targetPose then
+        local localElapsed = (clampedTime - activeClip.timelineStart) * activeClip.speed
+        local targetKeyTime = activeClip.trimStart + localElapsed
+        targetPose = sampleClipPose(activeClip, targetKeyTime)
+    end
+
+    -- Apply poses to avatar joints
+    for boneName, poseCFrame in pairs(targetPose) do
         local joint = cachedJoints[boneName] or cachedJoints[boneName:gsub(" ", "")] or cachedJoints[boneName:lower()]
         if joint then
-            local nextPose = nextFrame.Data and nextFrame.Data[boneName]
-            local targetTransform = nextPose and poseCFrame:Lerp(nextPose, alpha) or poseCFrame
-            joint.Transform = targetTransform
+            joint.Transform = poseCFrame
         end
     end
 end
@@ -719,9 +812,9 @@ rightPanel.Position = UDim2.new(0, 260, 0, 0)
 rightPanel.BackgroundTransparency = 1
 rightPanel.Parent = workspaceArea
 
--- UPPER ZONE: CLIP INSPECTOR / CROP & TRIM CONTROLS (Height: 180px)
+-- UPPER ZONE: CLIP INSPECTOR / CROP & TRIM CONTROLS (Height: 200px)
 local inspectorFrame = Instance.new("Frame")
-inspectorFrame.Size = UDim2.new(1, 0, 0, 180)
+inspectorFrame.Size = UDim2.new(1, 0, 0, 200)
 inspectorFrame.BackgroundColor3 = C.panelBg
 inspectorFrame.BorderSizePixel = 0
 inspectorFrame.Parent = rightPanel
@@ -729,9 +822,9 @@ applyStroke(inspectorFrame, C.divider, 1, 0)
 
 local inspHeader = Instance.new("TextLabel")
 inspHeader.Size = UDim2.new(1, -24, 0, 24)
-inspHeader.Position = UDim2.new(0, 14, 0, 8)
+inspHeader.Position = UDim2.new(0, 14, 0, 6)
 inspHeader.BackgroundTransparency = 1
-inspHeader.Text = "CLIP INSPECTOR // TRIM & TIMING"
+inspHeader.Text = "CLIP INSPECTOR // TRIM, SPEED & TRANSITIONS"
 inspHeader.TextColor3 = C.textMuted
 inspHeader.Font = Enum.Font.GothamBold
 inspHeader.TextSize = 10
@@ -743,7 +836,7 @@ local inspEmptyLabel = Instance.new("TextLabel")
 inspEmptyLabel.Size = UDim2.new(1, -40, 0, 60)
 inspEmptyLabel.Position = UDim2.new(0, 20, 0.5, -20)
 inspEmptyLabel.BackgroundTransparency = 1
-inspEmptyLabel.Text = "Select a clip on the timeline below to crop frames, trim timing, or adjust speed."
+inspEmptyLabel.Text = "Select a clip on the timeline below to crop frames, trim timing, adjust speed, or configure transitions."
 inspEmptyLabel.TextColor3 = C.textMuted
 inspEmptyLabel.Font = Enum.Font.Gotham
 inspEmptyLabel.TextSize = 11
@@ -752,14 +845,14 @@ inspEmptyLabel.Parent = inspectorFrame
 
 -- Active Inspector Container (Visible when clip selected)
 local inspContent = Instance.new("Frame")
-inspContent.Size = UDim2.new(1, -24, 1, -36)
-inspContent.Position = UDim2.new(0, 12, 0, 32)
+inspContent.Size = UDim2.new(1, -24, 1, -32)
+inspContent.Position = UDim2.new(0, 12, 0, 28)
 inspContent.BackgroundTransparency = 1
 inspContent.Visible = false
 inspContent.Parent = inspectorFrame
 
 local inspClipName = Instance.new("TextLabel")
-inspClipName.Size = UDim2.new(0.6, 0, 0, 20)
+inspClipName.Size = UDim2.new(0.6, 0, 0, 18)
 inspClipName.Position = UDim2.new(0, 0, 0, 0)
 inspClipName.BackgroundTransparency = 1
 inspClipName.Text = "Clip Name"
@@ -770,7 +863,7 @@ inspClipName.TextXAlignment = Enum.TextXAlignment.Left
 inspClipName.Parent = inspContent
 
 local inspDurationSummary = Instance.new("TextLabel")
-inspDurationSummary.Size = UDim2.new(0.4, 0, 0, 20)
+inspDurationSummary.Size = UDim2.new(0.4, 0, 0, 18)
 inspDurationSummary.Position = UDim2.new(0.6, 0, 0, 0)
 inspDurationSummary.BackgroundTransparency = 1
 inspDurationSummary.Text = "Length: 0.00s"
@@ -782,8 +875,8 @@ inspDurationSummary.Parent = inspContent
 
 -- Trim Start (In Point) Row
 local trimStartLabel = Instance.new("TextLabel")
-trimStartLabel.Size = UDim2.new(0, 110, 0, 22)
-trimStartLabel.Position = UDim2.new(0, 0, 0, 28)
+trimStartLabel.Size = UDim2.new(0, 110, 0, 20)
+trimStartLabel.Position = UDim2.new(0, 0, 0, 24)
 trimStartLabel.BackgroundTransparency = 1
 trimStartLabel.Text = "Trim Start (Crop In):"
 trimStartLabel.TextColor3 = C.textMuted
@@ -793,8 +886,8 @@ trimStartLabel.TextXAlignment = Enum.TextXAlignment.Left
 trimStartLabel.Parent = inspContent
 
 local trimStartBox = Instance.new("TextBox")
-trimStartBox.Size = UDim2.new(0, 60, 0, 22)
-trimStartBox.Position = UDim2.new(0, 115, 0, 28)
+trimStartBox.Size = UDim2.new(0, 60, 0, 20)
+trimStartBox.Position = UDim2.new(0, 115, 0, 24)
 trimStartBox.BackgroundColor3 = C.input
 trimStartBox.Text = "0.00"
 trimStartBox.TextColor3 = C.text
@@ -805,24 +898,24 @@ applyCorner(trimStartBox, 4)
 applyStroke(trimStartBox, C.divider, 1, 0)
 
 local trimStartSlider = Instance.new("TextButton")
-trimStartSlider.Size = UDim2.new(1, -190, 0, 12)
-trimStartSlider.Position = UDim2.new(0, 185, 0, 33)
+trimStartSlider.Size = UDim2.new(1, -190, 0, 10)
+trimStartSlider.Position = UDim2.new(0, 185, 0, 29)
 trimStartSlider.BackgroundColor3 = C.surface
 trimStartSlider.Text = ""
 trimStartSlider.Parent = inspContent
-applyCorner(trimStartSlider, 6)
+applyCorner(trimStartSlider, 5)
 
 local trimStartFill = Instance.new("Frame")
 trimStartFill.Size = UDim2.new(0, 0, 1, 0)
 trimStartFill.BackgroundColor3 = C.accentBlue
 trimStartFill.BorderSizePixel = 0
 trimStartFill.Parent = trimStartSlider
-applyCorner(trimStartFill, 6)
+applyCorner(trimStartFill, 5)
 
 -- Trim End (Out Point) Row
 local trimEndLabel = Instance.new("TextLabel")
-trimEndLabel.Size = UDim2.new(0, 110, 0, 22)
-trimEndLabel.Position = UDim2.new(0, 0, 0, 56)
+trimEndLabel.Size = UDim2.new(0, 110, 0, 20)
+trimEndLabel.Position = UDim2.new(0, 0, 0, 48)
 trimEndLabel.BackgroundTransparency = 1
 trimEndLabel.Text = "Trim End (Crop Out):"
 trimEndLabel.TextColor3 = C.textMuted
@@ -832,8 +925,8 @@ trimEndLabel.TextXAlignment = Enum.TextXAlignment.Left
 trimEndLabel.Parent = inspContent
 
 local trimEndBox = Instance.new("TextBox")
-trimEndBox.Size = UDim2.new(0, 60, 0, 22)
-trimEndBox.Position = UDim2.new(0, 115, 0, 56)
+trimEndBox.Size = UDim2.new(0, 60, 0, 20)
+trimEndBox.Position = UDim2.new(0, 115, 0, 48)
 trimEndBox.BackgroundColor3 = C.input
 trimEndBox.Text = "0.00"
 trimEndBox.TextColor3 = C.text
@@ -844,24 +937,24 @@ applyCorner(trimEndBox, 4)
 applyStroke(trimEndBox, C.divider, 1, 0)
 
 local trimEndSlider = Instance.new("TextButton")
-trimEndSlider.Size = UDim2.new(1, -190, 0, 12)
-trimEndSlider.Position = UDim2.new(0, 185, 0, 61)
+trimEndSlider.Size = UDim2.new(1, -190, 0, 10)
+trimEndSlider.Position = UDim2.new(0, 185, 0, 53)
 trimEndSlider.BackgroundColor3 = C.surface
 trimEndSlider.Text = ""
 trimEndSlider.Parent = inspContent
-applyCorner(trimEndSlider, 6)
+applyCorner(trimEndSlider, 5)
 
 local trimEndFill = Instance.new("Frame")
 trimEndFill.Size = UDim2.new(1, 0, 1, 0)
 trimEndFill.BackgroundColor3 = C.green
 trimEndFill.BorderSizePixel = 0
 trimEndFill.Parent = trimEndSlider
-applyCorner(trimEndFill, 6)
+applyCorner(trimEndFill, 5)
 
 -- Speed Row
 local speedLabel = Instance.new("TextLabel")
 speedLabel.Size = UDim2.new(0, 110, 0, 22)
-speedLabel.Position = UDim2.new(0, 0, 0, 84)
+speedLabel.Position = UDim2.new(0, 0, 0, 72)
 speedLabel.BackgroundTransparency = 1
 speedLabel.Text = "Playback Speed:"
 speedLabel.TextColor3 = C.textMuted
@@ -871,8 +964,8 @@ speedLabel.TextXAlignment = Enum.TextXAlignment.Left
 speedLabel.Parent = inspContent
 
 local speedBtnsContainer = Instance.new("Frame")
-speedBtnsContainer.Size = UDim2.new(1, -115, 0, 24)
-speedBtnsContainer.Position = UDim2.new(0, 115, 0, 84)
+speedBtnsContainer.Size = UDim2.new(1, -115, 0, 22)
+speedBtnsContainer.Position = UDim2.new(0, 115, 0, 72)
 speedBtnsContainer.BackgroundTransparency = 1
 speedBtnsContainer.Parent = inspContent
 
@@ -884,10 +977,65 @@ speedLayout.Parent = speedBtnsContainer
 local speedButtons = {}
 local speedOptions = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 }
 
+-- Transition From Previous Clip Row (PrestigeX Style)
+local transLabel = Instance.new("TextLabel")
+transLabel.Size = UDim2.new(0, 110, 0, 22)
+transLabel.Position = UDim2.new(0, 0, 0, 98)
+transLabel.BackgroundTransparency = 1
+transLabel.Text = "Transition In:"
+transLabel.TextColor3 = Color3.fromRGB(200, 160, 255)
+transLabel.Font = Enum.Font.GothamBold
+transLabel.TextSize = 10
+transLabel.TextXAlignment = Enum.TextXAlignment.Left
+transLabel.Parent = inspContent
+
+local transInfoLabel = Instance.new("TextLabel")
+transInfoLabel.Size = UDim2.new(1, -115, 0, 22)
+transInfoLabel.Position = UDim2.new(0, 115, 0, 98)
+transInfoLabel.BackgroundTransparency = 1
+transInfoLabel.Text = "First clip on timeline (starts directly without transition)"
+transInfoLabel.TextColor3 = C.textMuted
+transInfoLabel.Font = Enum.Font.Gotham
+transInfoLabel.TextSize = 9
+transInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
+transInfoLabel.Visible = false
+transInfoLabel.Parent = inspContent
+
+local transBtnsContainer = Instance.new("Frame")
+transBtnsContainer.Size = UDim2.new(1, -180, 0, 22)
+transBtnsContainer.Position = UDim2.new(0, 115, 0, 98)
+transBtnsContainer.BackgroundTransparency = 1
+transBtnsContainer.Parent = inspContent
+
+local transLayout = Instance.new("UIListLayout")
+transLayout.FillDirection = Enum.FillDirection.Horizontal
+transLayout.Padding = UDim.new(0, 4)
+transLayout.Parent = transBtnsContainer
+
+local transDurationBox = Instance.new("TextBox")
+transDurationBox.Size = UDim2.new(0, 58, 0, 22)
+transDurationBox.Position = UDim2.new(1, -58, 0, 98)
+transDurationBox.BackgroundColor3 = Color3.fromRGB(25, 20, 35)
+transDurationBox.Text = "0.22s"
+transDurationBox.TextColor3 = Color3.fromRGB(220, 170, 255)
+transDurationBox.Font = Enum.Font.Code
+transDurationBox.TextSize = 10
+transDurationBox.Parent = inspContent
+applyCorner(transDurationBox, 4)
+applyStroke(transDurationBox, Color3.fromRGB(120, 60, 190), 1, 0.4)
+
+local transitionPresetList = {
+    { key = "None", label = "Cut" },
+    { key = "Quick", label = "Quick (0.12s)" },
+    { key = "Smooth", label = "Smooth (0.22s)" },
+    { key = "Flow", label = "Flow (0.34s)" },
+    { key = "Soft", label = "Soft (0.48s)" },
+}
+
 -- Clip Action Buttons (Move Left, Move Right, Duplicate, Delete)
 local clipActionsRow = Instance.new("Frame")
 clipActionsRow.Size = UDim2.new(1, 0, 0, 26)
-clipActionsRow.Position = UDim2.new(0, 0, 1, -26)
+clipActionsRow.Position = UDim2.new(0, 0, 0, 126)
 clipActionsRow.BackgroundTransparency = 1
 clipActionsRow.Parent = inspContent
 
@@ -938,10 +1086,10 @@ btnDeleteClip.Parent = clipActionsRow
 applyCorner(btnDeleteClip, 4)
 applyStroke(btnDeleteClip, Color3.fromRGB(120, 30, 40), 1, 0.3)
 
--- LOWER ZONE: MULTI-CLIP VISUAL TIMELINE TRACK (Height: Remaining space ~314px)
+-- LOWER ZONE: MULTI-CLIP VISUAL TIMELINE TRACK (Height: Remaining space)
 local timelineSection = Instance.new("Frame")
-timelineSection.Size = UDim2.new(1, 0, 1, -180)
-timelineSection.Position = UDim2.new(0, 0, 0, 180)
+timelineSection.Size = UDim2.new(1, 0, 1, -200)
+timelineSection.Position = UDim2.new(0, 0, 0, 200)
 timelineSection.BackgroundColor3 = C.trackBg
 timelineSection.BorderSizePixel = 0
 timelineSection.ClipsDescendants = true
@@ -1295,6 +1443,52 @@ function renderTimelineTrack()
         clipSub.TextTruncate = Enum.TextTruncate.AtEnd
         clipSub.Parent = clipCard
 
+        -- Transition overlay and seam badge for idx > 1 (PrestigeX smooth transitions)
+        if idx > 1 then
+            local tr = clip.transition
+            local trDur = tr and tr.enabled and tonumber(tr.duration) or 0
+            if trDur > 0 then
+                local transZoneW = math.clamp(trDur * Timeline.pixelsPerSecond, 6, clipW * 0.8)
+                local transOverlay = Instance.new("Frame")
+                transOverlay.Size = UDim2.new(0, transZoneW, 1, 0)
+                transOverlay.Position = UDim2.new(0, 0, 0, 0)
+                transOverlay.BackgroundColor3 = Color3.fromRGB(160, 90, 240)
+                transOverlay.BackgroundTransparency = 0.82
+                transOverlay.BorderSizePixel = 0
+                transOverlay.Parent = clipCard
+                applyCorner(transOverlay, 5)
+
+                local transIcon = Instance.new("TextLabel")
+                transIcon.Size = UDim2.new(0, 16, 0, 12)
+                transIcon.Position = UDim2.new(0, 4, 1, -14)
+                transIcon.BackgroundTransparency = 1
+                transIcon.Text = "⧖"
+                transIcon.TextColor3 = Color3.fromRGB(200, 150, 255)
+                transIcon.Font = Enum.Font.GothamBold
+                transIcon.TextSize = 9
+                transIcon.Parent = clipCard
+
+                local transBadge = Instance.new("TextButton")
+                transBadge.Size = UDim2.new(0, 46, 0, 16)
+                transBadge.Position = UDim2.new(0, posX - 23, 0, 2)
+                transBadge.BackgroundColor3 = Color3.fromRGB(24, 16, 36)
+                transBadge.Text = string.format("⧖ %.2fs", trDur)
+                transBadge.TextColor3 = Color3.fromRGB(215, 160, 255)
+                transBadge.Font = Enum.Font.Code
+                transBadge.TextSize = 8
+                transBadge.ZIndex = 25
+                transBadge.Parent = clipsContainer
+                applyCorner(transBadge, 8)
+                applyStroke(transBadge, Color3.fromRGB(140, 70, 230), 1, 0.3)
+
+                transBadge.MouseButton1Click:Connect(function()
+                    Timeline.selectedClipIndex = idx
+                    updateInspectorUI()
+                    renderTimelineTrack()
+                end)
+            end
+        end
+
         -- Select Clip Action
         clipCard.MouseButton1Click:Connect(function()
             Timeline.selectedClipIndex = idx
@@ -1354,6 +1548,60 @@ function updateInspectorUI()
             renderTimelineTrack()
         end)
     end
+
+    -- Update Transition In Controls (PrestigeX Transitions)
+    if idx == 1 then
+        transInfoLabel.Visible = true
+        transBtnsContainer.Visible = false
+        transDurationBox.Visible = false
+    else
+        transInfoLabel.Visible = false
+        transBtnsContainer.Visible = true
+        transDurationBox.Visible = true
+
+        clip.transition = clip.transition or {
+            enabled = true,
+            mode = "Smooth",
+            duration = 0.22,
+            easing = "smootherstep",
+            adaptive = true
+        }
+
+        transDurationBox.Text = string.format("%.2fs", clip.transition.duration or 0.22)
+
+        for _, btn in ipairs(transBtnsContainer:GetChildren()) do
+            if btn:IsA("TextButton") then btn:Destroy() end
+        end
+
+        for _, opt in ipairs(transitionPresetList) do
+            local tBtn = Instance.new("TextButton")
+            tBtn.Size = UDim2.new(0, 0, 1, 0)
+            tBtn.AutomaticSize = Enum.AutomaticSize.X
+            local isSel = (clip.transition.mode == opt.key)
+            tBtn.BackgroundColor3 = isSel and Color3.fromRGB(60, 30, 95) or C.surface
+            tBtn.Text = " " .. opt.label .. " "
+            tBtn.TextColor3 = isSel and Color3.fromRGB(220, 160, 255) or C.textMuted
+            tBtn.Font = Enum.Font.GothamBold
+            tBtn.TextSize = 9
+            tBtn.Parent = transBtnsContainer
+            applyCorner(tBtn, 4)
+            if isSel then
+                applyStroke(tBtn, Color3.fromRGB(160, 80, 240), 1, 0.2)
+            else
+                applyStroke(tBtn, C.divider, 1, 0.4)
+            end
+
+            tBtn.MouseButton1Click:Connect(function()
+                clip.transition.mode = opt.key
+                local preset = TRANSITION_PRESETS[opt.key] or TRANSITION_PRESETS.Smooth
+                clip.transition.duration = preset.duration
+                clip.transition.easing = preset.easing
+                clip.transition.enabled = (preset.duration > 0)
+                updateInspectorUI()
+                renderTimelineTrack()
+            end)
+        end
+    end
 end
 
 -- Trim Start Box edit
@@ -1382,6 +1630,23 @@ trimEndBox.FocusLost:Connect(function()
     end
     updateInspectorUI()
     renderTimelineTrack()
+end)
+
+-- Transition Duration Box edit
+transDurationBox.FocusLost:Connect(function()
+    local idx = Timeline.selectedClipIndex
+    local clip = idx and Timeline.clips[idx]
+    if not clip or idx == 1 then return end
+
+    local val = tonumber(transDurationBox.Text:gsub("[^%d%.]", ""))
+    if val then
+        clip.transition = clip.transition or {}
+        clip.transition.duration = math.clamp(val, 0, 2.0)
+        clip.transition.enabled = (clip.transition.duration > 0)
+        clip.transition.mode = "Custom"
+        updateInspectorUI()
+        renderTimelineTrack()
+    end
 end)
 
 -- Trim Start Slider dragging
@@ -1468,7 +1733,20 @@ btnDuplicateClip.MouseButton1Click:Connect(function()
             trimStart = clip.trimStart,
             trimEnd = clip.trimEnd,
             speed = clip.speed,
-            color = CLIP_COLORS[((#Timeline.clips) % #CLIP_COLORS) + 1]
+            color = CLIP_COLORS[((#Timeline.clips) % #CLIP_COLORS) + 1],
+            transition = clip.transition and {
+                enabled = clip.transition.enabled,
+                mode = clip.transition.mode,
+                duration = clip.transition.duration,
+                easing = clip.transition.easing,
+                adaptive = clip.transition.adaptive
+            } or {
+                enabled = true,
+                mode = "Smooth",
+                duration = 0.22,
+                easing = "smootherstep",
+                adaptive = true
+            }
         }
         table.insert(Timeline.clips, idx + 1, newClip)
         Timeline.selectedClipIndex = idx + 1
@@ -1554,7 +1832,14 @@ local function populateMediaLibrary(filterText)
                             trimEnd = origDur,
                             speed = 1.0,
                             duration = origDur,
-                            color = CLIP_COLORS[colorIdx]
+                            color = CLIP_COLORS[colorIdx],
+                            transition = {
+                                enabled = true,
+                                mode = "Smooth",
+                                duration = 0.22,
+                                easing = "smootherstep",
+                                adaptive = true,
+                            }
                         }
                         table.insert(Timeline.clips, clip)
                         Timeline.selectedClipIndex = #Timeline.clips
@@ -1915,14 +2200,62 @@ local function generateMergedScript()
             local startT = clip.trimStart
             local endT = clip.trimEnd
 
-            for _, frame in ipairs(kfs) do
-                if frame.Time >= startT and frame.Time <= endT then
-                    local relativeTime = (frame.Time - startT) / clip.speed
-                    local globalTime = currentTrackStart + relativeTime
+            local tr = clip.transition
+            local trDuration = (clipIdx > 1 and tr and tr.enabled) and (tonumber(tr.duration) or 0) or 0
+            local prevClip = (clipIdx > 1) and Timeline.clips[clipIdx - 1] or nil
+            local maxAllowed = prevClip and math.min(clip.duration * 0.9, prevClip.duration * 0.9) or 0
+            local effectiveTr = math.min(trDuration, maxAllowed)
+
+            if effectiveTr > 0.01 and prevClip and prevClip.keyframes and #prevClip.keyframes > 0 then
+                -- Bake PrestigeX smooth transition blend frames between prevClip and this clip
+                local outgoingPose = sampleClipPose(prevClip, prevClip.trimEnd)
+                local steps = math.max(3, math.floor(effectiveTr * 30))
+                for s = 0, steps do
+                    local relT = (s / steps) * effectiveTr
+                    local normT = relT / effectiveTr
+                    local blendAlpha = easeTransition(tr.easing or "smootherstep", normT)
+
+                    local incomingKeyTime = clip.trimStart + (relT * clip.speed)
+                    local inPose = sampleClipPose(clip, incomingKeyTime)
+
+                    local blendedData = {}
+                    for bone, cf in pairs(inPose) do
+                        local outCf = outgoingPose[bone]
+                        blendedData[bone] = outCf and outCf:Lerp(cf, blendAlpha) or cf
+                    end
+                    for bone, outCf in pairs(outgoingPose) do
+                        if not blendedData[bone] then blendedData[bone] = outCf end
+                    end
+
                     table.insert(mergedKeyframes, {
-                        Time = globalTime,
-                        Data = frame.Data
+                        Time = currentTrackStart + relT,
+                        Data = blendedData
                     })
+                end
+
+                -- Add remaining keyframes of this clip after the transition window
+                for _, frame in ipairs(kfs) do
+                    if frame.Time >= startT and frame.Time <= endT then
+                        local relativeTime = (frame.Time - startT) / clip.speed
+                        if relativeTime > effectiveTr + 0.005 then
+                            local globalTime = currentTrackStart + relativeTime
+                            table.insert(mergedKeyframes, {
+                                Time = globalTime,
+                                Data = frame.Data
+                            })
+                        end
+                    end
+                end
+            else
+                for _, frame in ipairs(kfs) do
+                    if frame.Time >= startT and frame.Time <= endT then
+                        local relativeTime = (frame.Time - startT) / clip.speed
+                        local globalTime = currentTrackStart + relativeTime
+                        table.insert(mergedKeyframes, {
+                            Time = globalTime,
+                            Data = frame.Data
+                        })
+                    end
                 end
             end
         end
