@@ -117,7 +117,9 @@ local savedConfig = {
     binds = {},
     states = {},
     speed = 1.0,
-    speedBinds = {}
+    speedBinds = {},
+    customAnims = {},
+    hiddenLimbs = {}
 }
 
 if isfile and readfile and isfile(CONFIG_FILE) then
@@ -129,8 +131,32 @@ if isfile and readfile and isfile(CONFIG_FILE) then
             if data.states then savedConfig.states = data.states end
             if data.speed then savedConfig.speed = tonumber(data.speed) or 1.0 end
             if data.speedBinds then savedConfig.speedBinds = data.speedBinds end
+            if data.customAnims then savedConfig.customAnims = data.customAnims end
+            if data.hiddenLimbs then savedConfig.hiddenLimbs = data.hiddenLimbs end
         end
     end)
+end
+
+_G.hiddenBodyParts = _G.hiddenBodyParts or {}
+if savedConfig.hiddenLimbs then
+    for limbName, isHidden in pairs(savedConfig.hiddenLimbs) do
+        if isHidden then
+            _G.hiddenBodyParts[limbName] = true
+        end
+    end
+end
+
+-- Inject saved custom animations into catalog
+if savedConfig.customAnims and #savedConfig.customAnims > 0 then
+    for _, ca in ipairs(savedConfig.customAnims) do
+        table.insert(animations, {
+            name = ca.name,
+            path = ca.script,
+            category = "Custom",
+            isCustom = true
+        })
+    end
+    table.sort(animations, function(a, b) return a.name:lower() < b.name:lower() end)
 end
 
 local function saveConfig()
@@ -260,6 +286,7 @@ bodyContainer.ClipsDescendants = true
 bodyContainer.Parent = mainFrame
 
 local modalOverlay = nil
+local addCustomModal = nil
 local isMinimized = false
 
 local function toggleMinimize()
@@ -269,6 +296,9 @@ local function toggleMinimize()
         titleDivider.Visible = false
         if modalOverlay then
             modalOverlay.Visible = false
+        end
+        if addCustomModal then
+            addCustomModal.Visible = false
         end
         tween(mainFrame, {Size = UDim2.new(0, 440, 0, 48)}, 0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
     else
@@ -314,42 +344,52 @@ titleBar.InputChanged:Connect(function(input)
 end)
 
 -- ═══════════════════════════════════════════════════
--- 5. 5 UNIFIED TABS SEGMENTED BAR
+-- 5. 7 UNIFIED TABS SEGMENTED BAR
 -- ═══════════════════════════════════════════════════
-local tabNames = { "Reanims", "Favs", "Binds", "Speed", "States" }
+local tabNames = { "Reanims", "Favs", "Binds", "States", "Speed", "Limbs", "Record" }
 local tabButtons = {}
 
-local tabsFrame = Instance.new("Frame")
+local tabsFrame = Instance.new("ScrollingFrame")
 tabsFrame.Size = UDim2.new(1, -28, 0, 32)
 tabsFrame.Position = UDim2.new(0, 14, 0, 8)
 tabsFrame.BackgroundColor3 = C.input
+tabsFrame.BorderSizePixel = 0
+tabsFrame.ScrollBarThickness = 0
+tabsFrame.ScrollingDirection = Enum.ScrollingDirection.X
+tabsFrame.AutomaticCanvasSize = Enum.AutomaticSize.X
+tabsFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 tabsFrame.Parent = bodyContainer
 applyCorner(tabsFrame, 7)
 applyStroke(tabsFrame, C.divider, 1, 0)
 
-local tabWidthScale = 1 / #tabNames
+local tabsLayout = Instance.new("UIListLayout")
+tabsLayout.FillDirection = Enum.FillDirection.Horizontal
+tabsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+tabsLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+tabsLayout.Padding = UDim.new(0, 3)
+tabsLayout.Parent = tabsFrame
 
-local tabIndicator = Instance.new("Frame")
-tabIndicator.Size = UDim2.new(tabWidthScale, -4, 1, -6)
-tabIndicator.Position = UDim2.new(0, 3, 0, 3)
-tabIndicator.BackgroundColor3 = C.surfaceHover
-tabIndicator.BorderSizePixel = 0
-tabIndicator.Parent = tabsFrame
-applyCorner(tabIndicator, 5)
-applyStroke(tabIndicator, C.divider, 1, 0.4)
+local tabsPadding = Instance.new("UIPadding")
+tabsPadding.PaddingLeft = UDim.new(0, 3)
+tabsPadding.PaddingRight = UDim.new(0, 3)
+tabsPadding.PaddingTop = UDim.new(0, 3)
+tabsPadding.PaddingBottom = UDim.new(0, 3)
+tabsPadding.Parent = tabsFrame
 
 for i, tName in ipairs(tabNames) do
     local tb = Instance.new("TextButton")
-    tb.Size = UDim2.new(tabWidthScale, 0, 1, 0)
-    tb.Position = UDim2.new((i - 1) * tabWidthScale, 0, 0, 0)
-    tb.BackgroundTransparency = 1
+    tb.Size = UDim2.new(0, 55, 1, 0)
+    tb.BackgroundColor3 = (i == 1) and C.surfaceHover or C.input
+    tb.BackgroundTransparency = (i == 1) and 0 or 1
     tb.Text = tName
     tb.TextColor3 = (i == 1) and C.text or C.textMuted
     tb.Font = Enum.Font.GothamSemibold
-    tb.TextSize = 11
-    tb.ZIndex = 5
+    tb.TextSize = 10
+    tb.AutoButtonColor = false
     tb.Parent = tabsFrame
-    tabButtons[tName] = tb
+    applyCorner(tb, 5)
+    local s = applyStroke(tb, C.divider, 1, (i == 1) and 0.4 or 1)
+    tabButtons[tName] = { btn = tb, stroke = s }
 end
 
 -- ═══════════════════════════════════════════════════
@@ -464,7 +504,7 @@ listPanel.Visible = true
 listPanel.Parent = contentArea
 
 local searchBox = Instance.new("TextBox")
-searchBox.Size = UDim2.new(1, 0, 0, 32)
+searchBox.Size = UDim2.new(1, -104, 0, 32)
 searchBox.Position = UDim2.new(0, 0, 0, 0)
 searchBox.BackgroundColor3 = C.input
 searchBox.PlaceholderText = "Search animations..."
@@ -483,6 +523,18 @@ local searchPadding = Instance.new("UIPadding")
 searchPadding.PaddingLeft = UDim.new(0, 10)
 searchPadding.PaddingRight = UDim.new(0, 10)
 searchPadding.Parent = searchBox
+
+local addCustomBtn = Instance.new("TextButton")
+addCustomBtn.Size = UDim2.new(0, 98, 0, 32)
+addCustomBtn.Position = UDim2.new(1, -98, 0, 0)
+addCustomBtn.BackgroundColor3 = C.surface
+addCustomBtn.Text = "+ Add Custom"
+addCustomBtn.TextColor3 = C.accent
+addCustomBtn.Font = Enum.Font.GothamBold
+addCustomBtn.TextSize = 10
+addCustomBtn.Parent = listPanel
+applyCorner(addCustomBtn, 6)
+applyStroke(addCustomBtn, C.accent, 1, 0.4)
 
 local scrollList = Instance.new("ScrollingFrame")
 scrollList.Size = UDim2.new(1, 0, 1, -40)
@@ -936,6 +988,187 @@ modalSearch:GetPropertyChangedSignal("Text"):Connect(function()
     populateModalList(modalSearch.Text)
 end)
 
+-- ═══════════════════════════════════════════════════
+-- 8B. ADD CUSTOM ANIMATION MODAL
+-- ═══════════════════════════════════════════════════
+addCustomModal = Instance.new("Frame")
+addCustomModal.Size = UDim2.new(1, 0, 1, 0)
+addCustomModal.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+addCustomModal.BackgroundTransparency = 0.4
+addCustomModal.BorderSizePixel = 0
+addCustomModal.ZIndex = 50
+addCustomModal.Visible = false
+addCustomModal.Parent = mainFrame
+
+local addCard = Instance.new("Frame")
+addCard.Size = UDim2.new(0, 380, 0, 390)
+addCard.Position = UDim2.new(0.5, -190, 0.5, -195)
+addCard.BackgroundColor3 = C.bgCard
+addCard.BorderSizePixel = 0
+addCard.ZIndex = 51
+addCard.Parent = addCustomModal
+applyCorner(addCard, 10)
+applyStroke(addCard, C.border, 1.5, 0)
+
+local addTitle = Instance.new("TextLabel")
+addTitle.Size = UDim2.new(1, -50, 0, 36)
+addTitle.Position = UDim2.new(0, 14, 0, 6)
+addTitle.BackgroundTransparency = 1
+addTitle.Text = "Add Custom Animation"
+addTitle.TextColor3 = C.text
+addTitle.Font = Enum.Font.GothamBold
+addTitle.TextSize = 12
+addTitle.TextXAlignment = Enum.TextXAlignment.Left
+addTitle.ZIndex = 52
+addTitle.Parent = addCard
+
+local addCloseBtn = Instance.new("TextButton")
+addCloseBtn.Size = UDim2.new(0, 24, 0, 24)
+addCloseBtn.Position = UDim2.new(1, -34, 0, 10)
+addCloseBtn.BackgroundColor3 = C.surface
+addCloseBtn.Text = "✕"
+addCloseBtn.TextColor3 = C.textMuted
+addCloseBtn.Font = Enum.Font.GothamBold
+addCloseBtn.TextSize = 11
+addCloseBtn.ZIndex = 52
+addCloseBtn.Parent = addCard
+applyCorner(addCloseBtn, 12)
+
+local addNameBox = Instance.new("TextBox")
+addNameBox.Size = UDim2.new(1, -28, 0, 28)
+addNameBox.Position = UDim2.new(0, 14, 0, 44)
+addNameBox.BackgroundColor3 = C.input
+addNameBox.PlaceholderText = "Animation Name (optional)"
+addNameBox.PlaceholderColor3 = C.textMuted
+addNameBox.Text = ""
+addNameBox.TextColor3 = C.text
+addNameBox.Font = Enum.Font.GothamMedium
+addNameBox.TextSize = 11
+addNameBox.TextXAlignment = Enum.TextXAlignment.Left
+addNameBox.ClearTextOnFocus = false
+addNameBox.ZIndex = 52
+addNameBox.Parent = addCard
+applyCorner(addNameBox, 6)
+applyStroke(addNameBox, C.divider, 1, 0)
+local addNamePad = Instance.new("UIPadding")
+addNamePad.PaddingLeft = UDim.new(0, 10)
+addNamePad.Parent = addNameBox
+
+local addDataBox = Instance.new("TextBox")
+addDataBox.Size = UDim2.new(1, -28, 0, 210)
+addDataBox.Position = UDim2.new(0, 14, 0, 80)
+addDataBox.BackgroundColor3 = C.input
+addDataBox.PlaceholderText = "Paste keyframe script or table here...\n(Or press Ctrl+V to paste from clipboard)"
+addDataBox.PlaceholderColor3 = C.textMuted
+addDataBox.Text = ""
+addDataBox.TextColor3 = C.green
+addDataBox.Font = Enum.Font.Code
+addDataBox.TextSize = 10
+addDataBox.MultiLine = true
+addDataBox.ClearTextOnFocus = false
+addDataBox.TextWrapped = true
+addDataBox.TextXAlignment = Enum.TextXAlignment.Left
+addDataBox.TextYAlignment = Enum.TextYAlignment.Top
+addDataBox.ClipsDescendants = true
+addDataBox.ZIndex = 52
+addDataBox.Parent = addCard
+applyCorner(addDataBox, 6)
+applyStroke(addDataBox, C.divider, 1, 0)
+local addDataPad = Instance.new("UIPadding")
+addDataPad.PaddingLeft = UDim.new(0, 8)
+addDataPad.PaddingTop = UDim.new(0, 8)
+addDataPad.PaddingRight = UDim.new(0, 8)
+addDataPad.Parent = addDataBox
+
+local addStatus = Instance.new("TextLabel")
+addStatus.Size = UDim2.new(1, -28, 0, 20)
+addStatus.Position = UDim2.new(0, 14, 0, 298)
+addStatus.BackgroundTransparency = 1
+addStatus.Text = "Paste keyframe data or script table above."
+addStatus.TextColor3 = C.textMuted
+addStatus.Font = Enum.Font.Gotham
+addStatus.TextSize = 10
+addStatus.TextXAlignment = Enum.TextXAlignment.Left
+addStatus.ZIndex = 52
+addStatus.Parent = addCard
+
+local addSubmitBtn = Instance.new("TextButton")
+addSubmitBtn.Size = UDim2.new(1, -28, 0, 32)
+addSubmitBtn.Position = UDim2.new(0, 14, 1, -44)
+addSubmitBtn.BackgroundColor3 = Color3.fromRGB(24, 40, 30)
+addSubmitBtn.Text = "+ Add Animation"
+addSubmitBtn.TextColor3 = C.green
+addSubmitBtn.Font = Enum.Font.GothamBold
+addSubmitBtn.TextSize = 11
+addSubmitBtn.ZIndex = 52
+addSubmitBtn.Parent = addCard
+applyCorner(addSubmitBtn, 6)
+applyStroke(addSubmitBtn, Color3.fromRGB(40, 100, 60), 1, 0.4)
+
+local function closeAddModal()
+    addCustomModal.Visible = false
+    addNameBox.Text = ""
+    addDataBox.Text = ""
+    addStatus.Text = "Paste keyframe data or script table above."
+    addStatus.TextColor3 = C.textMuted
+end
+
+addCloseBtn.MouseButton1Click:Connect(closeAddModal)
+addCustomBtn.MouseButton1Click:Connect(function()
+    addCustomModal.Visible = true
+    addNameBox:CaptureFocus()
+end)
+
+local isDataBoxFocused = false
+addDataBox.Focused:Connect(function() isDataBoxFocused = true end)
+addDataBox.FocusLost:Connect(function() isDataBoxFocused = false end)
+
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if not isDataBoxFocused then return end
+    if input.KeyCode == Enum.KeyCode.V and (UserInputService:IsKeyDown(Enum.KeyCode.LeftControl) or UserInputService:IsKeyDown(Enum.KeyCode.RightControl)) then
+        task.spawn(function()
+            local ok, clip = pcall(getclipboard)
+            if ok and type(clip) == "string" and #clip > 0 then
+                addDataBox.Text = clip
+                addStatus.Text = "Loaded " .. tostring(#clip) .. " characters from clipboard."
+                addStatus.TextColor3 = C.green
+            end
+        end)
+    end
+end)
+
+addSubmitBtn.MouseButton1Click:Connect(function()
+    local raw = addDataBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
+    if raw == "" then
+        addStatus.Text = "Please paste keyframe script or table first!"
+        addStatus.TextColor3 = Color3.fromRGB(255, 120, 120)
+        return
+    end
+
+    if not raw:find("{", 1, true) then
+        addStatus.Text = "Invalid data: doesn't look like keyframes table or script."
+        addStatus.TextColor3 = Color3.fromRGB(255, 120, 120)
+        return
+    end
+
+    local capturedName = addNameBox.Text:match("^%s*(.-)%s*$")
+    local finalName = (capturedName and capturedName ~= "") and capturedName or ("Custom_" .. (#savedConfig.customAnims + 1))
+
+    table.insert(savedConfig.customAnims, { name = finalName, script = raw })
+    saveConfig()
+
+    table.insert(animations, {
+        name = finalName,
+        path = raw,
+        category = "Custom",
+        isCustom = true
+    })
+
+    table.sort(animations, function(a, b) return a.name:lower() < b.name:lower() end)
+    closeAddModal()
+    populateList()
+end)
+
 -- Build States Tab Rows
 for _, st in ipairs(stateTypes) do
     local sRow = Instance.new("Frame")
@@ -1004,13 +1237,670 @@ for _, st in ipairs(stateTypes) do
     clearBtn.MouseLeave:Connect(function()
         tween(clearBtn, {BackgroundColor3 = C.surface, TextColor3 = C.textMuted}, 0.15)
     end)
-
     clearBtn.MouseButton1Click:Connect(function()
         savedConfig.states[st] = nil
         saveConfig()
         sBtn.Text = "None"
         sBtn.TextColor3 = C.textMuted
     end)
+end
+
+-- PANEL 5: LIMBS TAB (Hide / Show Body Parts & Hats)
+local limbsPanel = Instance.new("ScrollingFrame")
+limbsPanel.Size = UDim2.new(1, 0, 1, 0)
+limbsPanel.BackgroundTransparency = 1
+limbsPanel.BorderSizePixel = 0
+limbsPanel.ScrollBarThickness = 3
+limbsPanel.ScrollBarImageColor3 = C.accent
+limbsPanel.ScrollBarImageTransparency = 0.6
+limbsPanel.Visible = false
+limbsPanel.Parent = contentArea
+
+local limbsLayout = Instance.new("UIListLayout")
+limbsLayout.Padding = UDim.new(0, 8)
+limbsLayout.SortOrder = Enum.SortOrder.LayoutOrder
+limbsLayout.Parent = limbsPanel
+
+local limbsHeader = Instance.new("TextLabel")
+limbsHeader.Size = UDim2.new(1, 0, 0, 18)
+limbsHeader.BackgroundTransparency = 1
+limbsHeader.Text = "LIMB & BODY VISIBILITY"
+limbsHeader.TextColor3 = C.textMuted
+limbsHeader.Font = Enum.Font.GothamBold
+limbsHeader.TextSize = 10
+limbsHeader.TextXAlignment = Enum.TextXAlignment.Left
+limbsHeader.Parent = limbsPanel
+
+local limbsSubtitle = Instance.new("TextLabel")
+limbsSubtitle.Size = UDim2.new(1, 0, 0, 14)
+limbsSubtitle.BackgroundTransparency = 1
+limbsSubtitle.Text = "Hide body parts, hats, face, or display name across real and clone character"
+limbsSubtitle.TextColor3 = C.textMuted
+limbsSubtitle.Font = Enum.Font.Gotham
+limbsSubtitle.TextSize = 9
+limbsSubtitle.TextXAlignment = Enum.TextXAlignment.Left
+limbsSubtitle.Parent = limbsPanel
+
+-- Quick Action Bar for Limbs (Hide All / Unhide All)
+local limbsActionBar = Instance.new("Frame")
+limbsActionBar.Size = UDim2.new(1, 0, 0, 32)
+limbsActionBar.BackgroundTransparency = 1
+limbsActionBar.Parent = limbsPanel
+
+local hideAllBtn = Instance.new("TextButton")
+hideAllBtn.Size = UDim2.new(0.5, -4, 1, 0)
+hideAllBtn.Position = UDim2.new(0, 0, 0, 0)
+hideAllBtn.BackgroundColor3 = C.bgCard
+hideAllBtn.Text = "Hide All Limbs"
+hideAllBtn.TextColor3 = Color3.fromRGB(255, 130, 130)
+hideAllBtn.Font = Enum.Font.GothamBold
+hideAllBtn.TextSize = 10
+hideAllBtn.Parent = limbsActionBar
+applyCorner(hideAllBtn, 6)
+applyStroke(hideAllBtn, Color3.fromRGB(80, 30, 30), 1, 0.2)
+
+local unhideAllBtn = Instance.new("TextButton")
+unhideAllBtn.Size = UDim2.new(0.5, -4, 1, 0)
+unhideAllBtn.Position = UDim2.new(0.5, 4, 0, 0)
+unhideAllBtn.BackgroundColor3 = C.bgCard
+unhideAllBtn.Text = "Show All Limbs"
+unhideAllBtn.TextColor3 = Color3.fromRGB(120, 230, 140)
+unhideAllBtn.Font = Enum.Font.GothamBold
+unhideAllBtn.TextSize = 10
+unhideAllBtn.Parent = limbsActionBar
+applyCorner(unhideAllBtn, 6)
+applyStroke(unhideAllBtn, Color3.fromRGB(30, 80, 40), 1, 0.2)
+
+local limbDefinitions = {
+    { id = "Head", name = "Head (Face, Hats, Nametag)", desc = "Hides head, all hats, hair, face decals & player billboard", parts = {"Head"} },
+    { id = "Torso", name = "Torso", desc = "Hides main body (Torso, UpperTorso, LowerTorso)", parts = {"Torso", "UpperTorso", "LowerTorso"} },
+    { id = "Left Arm", name = "Left Arm", desc = "Hides Left Arm / UpperArm / LowerArm / LeftHand", parts = {"Left Arm", "LeftUpperArm", "LeftLowerArm", "LeftHand"} },
+    { id = "Right Arm", name = "Right Arm", desc = "Hides Right Arm / UpperArm / LowerArm / RightHand", parts = {"Right Arm", "RightUpperArm", "RightLowerArm", "RightHand"} },
+    { id = "Left Leg", name = "Left Leg", desc = "Hides Left Leg / UpperLeg / LowerLeg / LeftFoot", parts = {"Left Leg", "LeftUpperLeg", "LeftLowerLeg", "LeftFoot"} },
+    { id = "Right Leg", name = "Right Leg", desc = "Hides Right Leg / UpperLeg / LowerLeg / RightFoot", parts = {"Right Leg", "RightUpperLeg", "RightLowerLeg", "RightFoot"} }
+}
+
+local limbButtons = {}
+
+local function setLimbHidden(limbDef, hidden)
+    for _, p in ipairs(limbDef.parts) do
+        if hidden then
+            _G.hiddenBodyParts[p] = true
+            savedConfig.hiddenLimbs[p] = true
+        else
+            _G.hiddenBodyParts[p] = nil
+            savedConfig.hiddenLimbs[p] = nil
+        end
+    end
+    saveConfig()
+
+    local btnData = limbButtons[limbDef.id]
+    if btnData then
+        btnData.badge.Text = hidden and "HIDDEN" or "VISIBLE"
+        btnData.badge.TextColor3 = hidden and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(120, 220, 130)
+        btnData.badgeBg.BackgroundColor3 = hidden and Color3.fromRGB(50, 15, 20) or Color3.fromRGB(15, 40, 25)
+        btnData.badgeStroke.Color = hidden and Color3.fromRGB(180, 40, 60) or Color3.fromRGB(40, 120, 60)
+        btnData.toggleBtn.Text = hidden and "Show" or "Hide"
+        btnData.toggleBtn.TextColor3 = hidden and Color3.fromRGB(120, 220, 130) or Color3.fromRGB(255, 120, 120)
+    end
+end
+
+for _, ldef in ipairs(limbDefinitions) do
+    local lRow = Instance.new("Frame")
+    lRow.Size = UDim2.new(1, 0, 0, 48)
+    lRow.BackgroundColor3 = C.bgCard
+    lRow.Parent = limbsPanel
+    applyCorner(lRow, 6)
+    applyStroke(lRow, C.divider, 1, 0)
+
+    local infoFrame = Instance.new("Frame")
+    infoFrame.Size = UDim2.new(1, -160, 1, 0)
+    infoFrame.Position = UDim2.new(0, 12, 0, 0)
+    infoFrame.BackgroundTransparency = 1
+    infoFrame.Parent = lRow
+
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1, 0, 0, 20)
+    titleLbl.Position = UDim2.new(0, 0, 0, 6)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Text = ldef.name
+    titleLbl.TextColor3 = C.text
+    titleLbl.Font = Enum.Font.GothamBold
+    titleLbl.TextSize = 11
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+    titleLbl.Parent = infoFrame
+
+    local descLbl = Instance.new("TextLabel")
+    descLbl.Size = UDim2.new(1, 0, 0, 16)
+    descLbl.Position = UDim2.new(0, 0, 0, 24)
+    descLbl.BackgroundTransparency = 1
+    descLbl.Text = ldef.desc
+    descLbl.TextColor3 = C.textMuted
+    descLbl.Font = Enum.Font.Gotham
+    descLbl.TextSize = 9
+    descLbl.TextXAlignment = Enum.TextXAlignment.Left
+    descLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    descLbl.Parent = infoFrame
+
+    -- Status badge
+    local isCurrentlyHidden = false
+    for _, p in ipairs(ldef.parts) do
+        if savedConfig.hiddenLimbs[p] or (_G.hiddenBodyParts and _G.hiddenBodyParts[p]) then
+            isCurrentlyHidden = true
+            break
+        end
+    end
+
+    local badgeBg = Instance.new("Frame")
+    badgeBg.Size = UDim2.new(0, 64, 0, 24)
+    badgeBg.Position = UDim2.new(1, -145, 0.5, -12)
+    badgeBg.BackgroundColor3 = isCurrentlyHidden and Color3.fromRGB(50, 15, 20) or Color3.fromRGB(15, 40, 25)
+    badgeBg.Parent = lRow
+    applyCorner(badgeBg, 4)
+    local badgeStroke = applyStroke(badgeBg, isCurrentlyHidden and Color3.fromRGB(180, 40, 60) or Color3.fromRGB(40, 120, 60), 1, 0)
+
+    local badge = Instance.new("TextLabel")
+    badge.Size = UDim2.new(1, 0, 1, 0)
+    badge.BackgroundTransparency = 1
+    badge.Text = isCurrentlyHidden and "HIDDEN" or "VISIBLE"
+    badge.TextColor3 = isCurrentlyHidden and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(120, 220, 130)
+    badge.Font = Enum.Font.GothamBold
+    badge.TextSize = 9
+    badge.Parent = badgeBg
+
+    local toggleBtn = Instance.new("TextButton")
+    toggleBtn.Size = UDim2.new(0, 66, 0, 26)
+    toggleBtn.Position = UDim2.new(1, -74, 0.5, -13)
+    toggleBtn.BackgroundColor3 = C.surface
+    toggleBtn.Text = isCurrentlyHidden and "Show" or "Hide"
+    toggleBtn.TextColor3 = isCurrentlyHidden and Color3.fromRGB(120, 220, 130) or Color3.fromRGB(255, 120, 120)
+    toggleBtn.Font = Enum.Font.GothamBold
+    toggleBtn.TextSize = 10
+    toggleBtn.Parent = lRow
+    applyCorner(toggleBtn, 4)
+    applyStroke(toggleBtn, C.divider, 1, 0)
+
+    limbButtons[ldef.id] = {
+        badge = badge,
+        badgeBg = badgeBg,
+        badgeStroke = badgeStroke,
+        toggleBtn = toggleBtn
+    }
+
+    toggleBtn.MouseButton1Click:Connect(function()
+        local nowHidden = not (_G.hiddenBodyParts[ldef.parts[1]] ~= nil)
+        setLimbHidden(ldef, nowHidden)
+    end)
+end
+
+hideAllBtn.MouseButton1Click:Connect(function()
+    for _, ldef in ipairs(limbDefinitions) do
+        setLimbHidden(ldef, true)
+    end
+end)
+
+unhideAllBtn.MouseButton1Click:Connect(function()
+    for _, ldef in ipairs(limbDefinitions) do
+        setLimbHidden(ldef, false)
+    end
+end)
+
+local function updateLimbsUI()
+    for _, ldef in ipairs(limbDefinitions) do
+        local isHidden = false
+        for _, p in ipairs(ldef.parts) do
+            if savedConfig.hiddenLimbs[p] or (_G.hiddenBodyParts and _G.hiddenBodyParts[p]) then
+                isHidden = true
+                break
+            end
+        end
+        local btnData = limbButtons[ldef.id]
+        if btnData then
+            btnData.badge.Text = isHidden and "HIDDEN" or "VISIBLE"
+            btnData.badge.TextColor3 = isHidden and Color3.fromRGB(255, 100, 100) or Color3.fromRGB(120, 220, 130)
+            btnData.badgeBg.BackgroundColor3 = isHidden and Color3.fromRGB(50, 15, 20) or Color3.fromRGB(15, 40, 25)
+            btnData.badgeStroke.Color = isHidden and Color3.fromRGB(180, 40, 60) or Color3.fromRGB(40, 120, 60)
+            btnData.toggleBtn.Text = isHidden and "Show" or "Hide"
+            btnData.toggleBtn.TextColor3 = isHidden and Color3.fromRGB(120, 220, 130) or Color3.fromRGB(255, 120, 120)
+        end
+    end
+end
+
+-- Continuous RenderStepped loop to enforce clone transparency and nametag hiding
+RunService.RenderStepped:Connect(function()
+    local clone = api and api.get_clone and api.get_clone()
+    if not clone then return end
+    if not _G.hiddenBodyParts or not next(_G.hiddenBodyParts) then return end
+
+    for partName, _ in pairs(_G.hiddenBodyParts) do
+        local p = clone:FindFirstChild(partName)
+        if p and p:IsA("BasePart") then
+            p.LocalTransparencyModifier = 1
+            p.Transparency = 1
+        end
+
+        if partName == "Head" then
+            for _, d in ipairs(clone:GetDescendants()) do
+                if d:IsA("Decal") then
+                    d.Transparency = 1
+                elseif d:IsA("Accessory") then
+                    local handle = d:FindFirstChild("Handle")
+                    if handle and handle:IsA("BasePart") then
+                        handle.LocalTransparencyModifier = 1
+                        handle.Transparency = 1
+                    end
+                end
+            end
+            local hum = clone:FindFirstChildOfClass("Humanoid")
+            if hum then
+                hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+            end
+        end
+    end
+end)
+
+limbsPanel.CanvasSize = UDim2.new(0, 0, 0, #limbDefinitions * 56 + 80)
+
+-- PANEL 6: RECORD TAB (AnimRecorder Studio)
+local recordPanel = Instance.new("ScrollingFrame")
+recordPanel.Size = UDim2.new(1, 0, 1, 0)
+recordPanel.BackgroundTransparency = 1
+recordPanel.BorderSizePixel = 0
+recordPanel.ScrollBarThickness = 3
+recordPanel.ScrollBarImageColor3 = C.accent
+recordPanel.ScrollBarImageTransparency = 0.6
+recordPanel.Visible = false
+recordPanel.Parent = contentArea
+
+local recordLayout = Instance.new("UIListLayout")
+recordLayout.Padding = UDim.new(0, 8)
+recordLayout.SortOrder = Enum.SortOrder.LayoutOrder
+recordLayout.Parent = recordPanel
+
+local AnimRecorder = {
+    isRecording = false,
+    recordedFrames = {},
+    startTime = 0,
+    recordingConn = nil,
+    lastRecordedTime = 0,
+    frameInterval = 1/30,
+}
+
+-- Recorder Studio Card
+local recStudio = Instance.new("Frame")
+recStudio.Size = UDim2.new(1, 0, 0, 110)
+recStudio.BackgroundColor3 = C.bgCard
+recStudio.Parent = recordPanel
+applyCorner(recStudio, 8)
+local recStudioStroke = applyStroke(recStudio, C.divider, 1.2, 0)
+
+-- Header Status inside Studio
+local recHeaderFrame = Instance.new("Frame")
+recHeaderFrame.Size = UDim2.new(1, -20, 0, 24)
+recHeaderFrame.Position = UDim2.new(0, 10, 0, 10)
+recHeaderFrame.BackgroundTransparency = 1
+recHeaderFrame.Parent = recStudio
+
+local recStatusDot = Instance.new("Frame")
+recStatusDot.Size = UDim2.new(0, 8, 0, 8)
+recStatusDot.Position = UDim2.new(0, 2, 0.5, -4)
+recStatusDot.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+recStatusDot.Parent = recHeaderFrame
+applyCorner(recStatusDot, 4)
+
+local recStatusText = Instance.new("TextLabel")
+recStatusText.Size = UDim2.new(0, 110, 1, 0)
+recStatusText.Position = UDim2.new(0, 16, 0, 0)
+recStatusText.BackgroundTransparency = 1
+recStatusText.Text = "STANDBY"
+recStatusText.TextColor3 = C.textMuted
+recStatusText.Font = Enum.Font.GothamBold
+recStatusText.TextSize = 10
+recStatusText.TextXAlignment = Enum.TextXAlignment.Left
+recStatusText.Parent = recHeaderFrame
+
+local recTimerLabel = Instance.new("TextLabel")
+recTimerLabel.Size = UDim2.new(0, 80, 1, 0)
+recTimerLabel.Position = UDim2.new(1, -150, 0, 0)
+recTimerLabel.BackgroundTransparency = 1
+recTimerLabel.Text = "00:00.0"
+recTimerLabel.TextColor3 = C.accent
+recTimerLabel.Font = Enum.Font.GothamBold
+recTimerLabel.TextSize = 12
+recTimerLabel.TextXAlignment = Enum.TextXAlignment.Right
+recTimerLabel.Parent = recHeaderFrame
+
+local recFrameCounter = Instance.new("TextLabel")
+recFrameCounter.Size = UDim2.new(0, 65, 1, 0)
+recFrameCounter.Position = UDim2.new(1, -65, 0, 0)
+recFrameCounter.BackgroundTransparency = 1
+recFrameCounter.Text = "0 frames"
+recFrameCounter.TextColor3 = C.textMuted
+recFrameCounter.Font = Enum.Font.GothamMedium
+recFrameCounter.TextSize = 10
+recFrameCounter.TextXAlignment = Enum.TextXAlignment.Right
+recFrameCounter.Parent = recHeaderFrame
+
+-- Big Action Button (Start / Stop)
+local recActionBtn = Instance.new("TextButton")
+recActionBtn.Size = UDim2.new(1, -20, 0, 36)
+recActionBtn.Position = UDim2.new(0, 10, 0, 42)
+recActionBtn.BackgroundColor3 = C.surface
+recActionBtn.Text = "START RECORDING (30 FPS)"
+recActionBtn.TextColor3 = C.text
+recActionBtn.Font = Enum.Font.GothamBold
+recActionBtn.TextSize = 11
+recActionBtn.Parent = recStudio
+applyCorner(recActionBtn, 6)
+local recActionStroke = applyStroke(recActionBtn, C.border, 1, 0)
+
+-- Bottom Help Note in Studio
+local recHint = Instance.new("TextLabel")
+recHint.Size = UDim2.new(1, -20, 0, 16)
+recHint.Position = UDim2.new(0, 10, 0, 84)
+recHint.BackgroundTransparency = 1
+recHint.Text = "Captures Motor6D & constraint transforms in real-time. Auto-saves to file and clipboard."
+recHint.TextColor3 = C.textMuted
+recHint.Font = Enum.Font.Gotham
+recHint.TextSize = 9
+recHint.TextXAlignment = Enum.TextXAlignment.Left
+recHint.Parent = recStudio
+
+-- Recordings List Header
+local recListHeader = Instance.new("TextLabel")
+recListHeader.Size = UDim2.new(1, 0, 0, 20)
+recListHeader.BackgroundTransparency = 1
+recListHeader.Text = "SAVED RECORDINGS"
+recListHeader.TextColor3 = C.textMuted
+recListHeader.Font = Enum.Font.GothamBold
+recListHeader.TextSize = 10
+recListHeader.TextXAlignment = Enum.TextXAlignment.Left
+recListHeader.Parent = recordPanel
+
+local recScrollList = Instance.new("Frame")
+recScrollList.Size = UDim2.new(1, 0, 0, 100)
+recScrollList.BackgroundTransparency = 1
+recScrollList.Parent = recordPanel
+
+local recListLayout = Instance.new("UIListLayout")
+recListLayout.Padding = UDim.new(0, 6)
+recListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+recListLayout.Parent = recScrollList
+
+local function getCloneConstraints()
+    local clone = api and api.get_clone and api.get_clone()
+    if not clone then return nil end
+
+    local constraints = {}
+    for _, descendant in ipairs(clone:GetDescendants()) do
+        if descendant:IsA("AnimationConstraint") then
+            local attachment = descendant.Attachment1
+            if attachment and attachment.Parent then
+                constraints[attachment.Parent.Name] = descendant
+            end
+        elseif descendant:IsA("Motor6D") then
+            local childPart = descendant.Part1
+            if childPart and childPart.Parent and not constraints[childPart.Name] then
+                constraints[childPart.Name] = descendant
+            end
+        end
+    end
+    return constraints
+end
+
+local populateRecordingsList
+
+local function stopRecording()
+    if not AnimRecorder.isRecording then return end
+    AnimRecorder.isRecording = false
+
+    if AnimRecorder.recordingConn then
+        AnimRecorder.recordingConn:Disconnect()
+        AnimRecorder.recordingConn = nil
+    end
+
+    recStatusDot.BackgroundColor3 = Color3.fromRGB(90, 90, 90)
+    recStatusText.Text = "STANDBY"
+    recStatusText.TextColor3 = C.textMuted
+    recActionBtn.Text = "START RECORDING (30 FPS)"
+    recActionBtn.TextColor3 = C.text
+    recActionBtn.BackgroundColor3 = C.surface
+    recActionStroke.Color = C.border
+    recStudioStroke.Color = C.divider
+
+    local frameCount = #AnimRecorder.recordedFrames
+    if frameCount == 0 then return end
+
+    task.spawn(function()
+        local recordedFrames = AnimRecorder.recordedFrames
+        local totalDuration = recordedFrames[#recordedFrames].Time
+        local stamp = tostring(os.time())
+        local animName = "Recorded_" .. stamp
+
+        local outputParts = {}
+        table.insert(outputParts, "-- " .. tostring(frameCount) .. " keyframes\n")
+        table.insert(outputParts, "-- " .. string.format("%.3f", totalDuration) .. " seconds\n")
+        table.insert(outputParts, "return {\n")
+        table.insert(outputParts, '  ["Animation"] = {\n')
+
+        local yieldEvery = 50
+        for i, frame in ipairs(recordedFrames) do
+            local frameStr = "    {Time = " .. string.format("%.3f", frame.Time) .. ", Data = {\n"
+            for boneName, cf in pairs(frame.Data) do
+                local comps = {cf:GetComponents()}
+                local compStrs = {}
+                for j = 1, 12 do
+                    compStrs[j] = string.format("%.6f", comps[j])
+                end
+                frameStr = frameStr .. '      ["' .. boneName .. '"] = CFrame.new(' .. table.concat(compStrs, ", ") .. '),\n'
+            end
+            frameStr = frameStr .. "    }},\n"
+            table.insert(outputParts, frameStr)
+
+            if i % yieldEvery == 0 then
+                task.wait()
+            end
+        end
+
+        table.insert(outputParts, "  }\n")
+        table.insert(outputParts, "}\n")
+        local output = table.concat(outputParts)
+
+        pcall(function()
+            if makefolder then makefolder("ZenReanim") makefolder("ZenReanim/Recordings") end
+            if writefile then writefile("ZenReanim/Recordings/" .. animName .. ".lua", output) end
+        end)
+
+        pcall(function()
+            if setclipboard then setclipboard(output) end
+        end)
+
+        table.insert(savedConfig.customAnims, { name = animName, script = output })
+        saveConfig()
+
+        table.insert(animations, {
+            name = animName,
+            path = output,
+            category = "Recorded",
+            isCustom = true
+        })
+
+        table.sort(animations, function(a, b) return a.name:lower() < b.name:lower() end)
+        populateList()
+        populateRecordingsList()
+    end)
+end
+
+function populateRecordingsList()
+    for _, c in ipairs(recScrollList:GetChildren()) do
+        if c:IsA("Frame") then c:Destroy() end
+    end
+
+    local recCount = 0
+    for _, a in ipairs(animations) do
+        if a.category == "Recorded" or (a.isCustom and a.name:find("^Recorded_")) then
+            recCount = recCount + 1
+            local rCard = Instance.new("Frame")
+            rCard.Size = UDim2.new(1, 0, 0, 36)
+            rCard.BackgroundColor3 = C.bgCard
+            rCard.Parent = recScrollList
+            applyCorner(rCard, 6)
+            applyStroke(rCard, C.divider, 1, 0)
+
+            local rName = Instance.new("TextLabel")
+            rName.Size = UDim2.new(1, -160, 1, 0)
+            rName.Position = UDim2.new(0, 10, 0, 0)
+            rName.BackgroundTransparency = 1
+            rName.Text = a.name
+            rName.TextColor3 = C.text
+            rName.Font = Enum.Font.GothamMedium
+            rName.TextSize = 11
+            rName.TextXAlignment = Enum.TextXAlignment.Left
+            rName.Parent = rCard
+
+            local rPlayBtn = Instance.new("TextButton")
+            rPlayBtn.Size = UDim2.new(0, 48, 0, 24)
+            rPlayBtn.Position = UDim2.new(1, -150, 0.5, -12)
+            rPlayBtn.BackgroundColor3 = Color3.fromRGB(24, 40, 30)
+            rPlayBtn.Text = "Play"
+            rPlayBtn.TextColor3 = C.green
+            rPlayBtn.Font = Enum.Font.GothamBold
+            rPlayBtn.TextSize = 10
+            rPlayBtn.Parent = rCard
+            applyCorner(rPlayBtn, 4)
+
+            rPlayBtn.MouseButton1Click:Connect(function()
+                playSelectedAnimation(a)
+            end)
+
+            local rCopyBtn = Instance.new("TextButton")
+            rCopyBtn.Size = UDim2.new(0, 48, 0, 24)
+            rCopyBtn.Position = UDim2.new(1, -98, 0.5, -12)
+            rCopyBtn.BackgroundColor3 = C.surface
+            rCopyBtn.Text = "Copy"
+            rCopyBtn.TextColor3 = C.accent
+            rCopyBtn.Font = Enum.Font.GothamMedium
+            rCopyBtn.TextSize = 10
+            rCopyBtn.Parent = rCard
+            applyCorner(rCopyBtn, 4)
+
+            rCopyBtn.MouseButton1Click:Connect(function()
+                pcall(function()
+                    if setclipboard then setclipboard(a.path) end
+                    rCopyBtn.Text = "Copied!"
+                    task.delay(1.5, function() rCopyBtn.Text = "Copy" end)
+                end)
+            end)
+
+            local rDelBtn = Instance.new("TextButton")
+            rDelBtn.Size = UDim2.new(0, 44, 0, 24)
+            rDelBtn.Position = UDim2.new(1, -46, 0.5, -12)
+            rDelBtn.BackgroundColor3 = C.surface
+            rDelBtn.Text = "Del"
+            rDelBtn.TextColor3 = Color3.fromRGB(255, 120, 120)
+            rDelBtn.Font = Enum.Font.GothamMedium
+            rDelBtn.TextSize = 10
+            rDelBtn.Parent = rCard
+            applyCorner(rDelBtn, 4)
+
+            rDelBtn.MouseButton1Click:Connect(function()
+                for idx, ca in ipairs(savedConfig.customAnims) do
+                    if ca.name == a.name then
+                        table.remove(savedConfig.customAnims, idx)
+                        break
+                    end
+                end
+                saveConfig()
+                for idx, anim in ipairs(animations) do
+                    if anim.name == a.name then
+                        table.remove(animations, idx)
+                        break
+                    end
+                end
+                populateList()
+                populateRecordingsList()
+            end)
+        end
+    end
+
+    recScrollList.Size = UDim2.new(1, 0, 0, math.max(10, recCount * 42))
+    recordPanel.CanvasSize = UDim2.new(0, 0, 0, 180 + recScrollList.Size.Y.Offset)
+end
+
+local function startRecording()
+    if AnimRecorder.isRecording then return end
+    if not (api and api.is_reanimated and api.is_reanimated()) then
+        warn("Zen Reanimations: Enable reanimation first to record animations!")
+        return
+    end
+
+    AnimRecorder.isRecording = true
+    AnimRecorder.recordedFrames = {}
+    AnimRecorder.startTime = tick()
+    AnimRecorder.lastRecordedTime = 0
+
+    recStatusDot.BackgroundColor3 = Color3.fromRGB(255, 60, 60)
+    recStatusText.Text = "RECORDING"
+    recStatusText.TextColor3 = Color3.fromRGB(255, 90, 90)
+    recActionBtn.Text = "STOP & SAVE RECORDING"
+    recActionBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    recActionBtn.BackgroundColor3 = Color3.fromRGB(50, 18, 22)
+    recActionStroke.Color = Color3.fromRGB(255, 60, 90)
+    recStudioStroke.Color = Color3.fromRGB(180, 50, 70)
+
+    AnimRecorder.recordingConn = RunService.Heartbeat:Connect(function()
+        if not AnimRecorder.isRecording then return end
+        local elapsed = tick() - AnimRecorder.startTime
+        if elapsed - AnimRecorder.lastRecordedTime < AnimRecorder.frameInterval then return end
+        AnimRecorder.lastRecordedTime = elapsed
+
+        local mins = math.floor(elapsed / 60)
+        local secs = elapsed % 60
+        recTimerLabel.Text = string.format("%02d:%04.1f", mins, secs)
+        recFrameCounter.Text = tostring(#AnimRecorder.recordedFrames) .. " frames"
+
+        local constraints = getCloneConstraints()
+        if not constraints then return end
+
+        local frameData = {}
+        for boneName, constraint in pairs(constraints) do
+            if constraint and constraint.Parent then
+                if constraint:IsA("Motor6D") then
+                    local p0 = constraint.Part0
+                    local p1 = constraint.Part1
+                    if p0 and p1 and p0.Parent and p1.Parent then
+                        frameData[boneName] = p0.CFrame * constraint.C0:Inverse() * constraint.C1:Inverse() * p1.CFrame
+                    else
+                        frameData[boneName] = constraint.Transform
+                    end
+                else
+                    local att0 = constraint.Attachment0
+                    local att1 = constraint.Attachment1
+                    if att0 and att1 and att0.Parent and att1.Parent then
+                        local w0 = att0.Parent.CFrame * att0.CFrame
+                        local w1 = att1.Parent.CFrame * att1.CFrame
+                        frameData[boneName] = w0:Inverse() * w1
+                    else
+                        frameData[boneName] = constraint.Transform
+                    end
+                end
+            end
+        end
+        table.insert(AnimRecorder.recordedFrames, { Time = elapsed, Data = frameData })
+    end)
+end
+
+recActionBtn.MouseButton1Click:Connect(function()
+    if AnimRecorder.isRecording then
+        stopRecording()
+    else
+        startRecording()
+    end
+end)
+
+local function updateRecordUI()
+    populateRecordingsList()
+    recordPanel.CanvasSize = UDim2.new(0, 0, 0, 170 + recScrollList.AbsoluteSize.Y)
 end
 
 -- ═══════════════════════════════════════════════════
@@ -1109,11 +1999,17 @@ local function populateList()
         end)
 
         -- Play Button (Animation Title)
+        local isCustomAnim = anim.isCustom or (anim.category == "Custom") or (anim.category == "Recorded")
         local playBtn = Instance.new("TextButton")
-        playBtn.Size = UDim2.new(1, -78, 1, 0)
+        playBtn.Size = UDim2.new(1, isCustomAnim and -108 or -78, 1, 0)
         playBtn.Position = UDim2.new(0, 30, 0, 0)
         playBtn.BackgroundTransparency = 1
-        playBtn.Text = anim.name
+        playBtn.RichText = true
+        if isCustomAnim then
+            playBtn.Text = anim.name .. " <font color=\"rgb(80,210,255)\">[CUSTOM]</font>"
+        else
+            playBtn.Text = anim.name
+        end
         playBtn.TextColor3 = (activeOutlineAnim == anim.name) and C.accent or C.text
         playBtn.Font = (activeOutlineAnim == anim.name) and Enum.Font.GothamBold or Enum.Font.GothamMedium
         playBtn.TextSize = 11
@@ -1147,7 +2043,7 @@ local function populateList()
         -- Keybind Button
         local keyBtn = Instance.new("TextButton")
         keyBtn.Size = UDim2.new(0, 38, 0, 22)
-        keyBtn.Position = UDim2.new(1, -44, 0.5, -11)
+        keyBtn.Position = UDim2.new(1, isCustomAnim and -72 or -44, 0.5, -11)
         keyBtn.BackgroundColor3 = C.input
         local boundKey = savedConfig.binds[anim.name]
         keyBtn.Text = boundKey and ("[" .. boundKey .. "]") or "[+]"
@@ -1170,6 +2066,45 @@ local function populateList()
             keyBtn.Text = "[?]"
             keyBtn.TextColor3 = Color3.fromRGB(255, 180, 50)
         end)
+
+        if isCustomAnim then
+            local delBtn = Instance.new("TextButton")
+            delBtn.Size = UDim2.new(0, 24, 0, 22)
+            delBtn.Position = UDim2.new(1, -28, 0.5, -11)
+            delBtn.BackgroundColor3 = C.surface
+            delBtn.Text = "✕"
+            delBtn.TextColor3 = C.textMuted
+            delBtn.Font = Enum.Font.GothamBold
+            delBtn.TextSize = 10
+            delBtn.Parent = row
+            applyCorner(delBtn, 4)
+            applyStroke(delBtn, C.divider, 1, 0)
+
+            delBtn.MouseEnter:Connect(function()
+                tween(delBtn, {BackgroundColor3 = C.dangerHover, TextColor3 = Color3.fromRGB(255, 120, 120)}, 0.15)
+            end)
+            delBtn.MouseLeave:Connect(function()
+                tween(delBtn, {BackgroundColor3 = C.surface, TextColor3 = C.textMuted}, 0.15)
+            end)
+            delBtn.MouseButton1Click:Connect(function()
+                for i, a in ipairs(animations) do
+                    if a.name == anim.name then
+                        table.remove(animations, i)
+                        break
+                    end
+                end
+                for i, ca in ipairs(savedConfig.customAnims) do
+                    if ca.name == anim.name then
+                        table.remove(savedConfig.customAnims, i)
+                        break
+                    end
+                end
+                savedConfig.favs[anim.name] = nil
+                savedConfig.binds[anim.name] = nil
+                saveConfig()
+                populateList()
+            end)
+        end
     end
 
     scrollList.CanvasSize = UDim2.new(0, 0, 0, #displayList * (ROW_HEIGHT + 4))
@@ -1289,33 +2224,34 @@ end
 local function switchTab(tab)
     currentTab = tab
 
-    for i, tName in ipairs(tabNames) do
-        local tb = tabButtons[tName]
-        if tb then
-            tb.TextColor3 = (tName == tab) and C.text or C.textMuted
-            if tName == tab then
-                tween(tabIndicator, {
-                    Position = UDim2.new((i - 1) * tabWidthScale, 3, 0, 3),
-                    Size = UDim2.new(tabWidthScale, -6, 1, -6)
-                }, 0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
-            end
-        end
+    for tName, data in pairs(tabButtons) do
+        local isActive = (tName == tab)
+        data.btn.TextColor3 = isActive and C.text or C.textMuted
+        data.btn.BackgroundColor3 = isActive and C.surfaceHover or C.input
+        data.btn.BackgroundTransparency = isActive and 0 or 1
+        data.stroke.Transparency = isActive and 0.4 or 1
     end
 
     listPanel.Visible   = (tab == "Reanims" or tab == "Favs")
     bindsPanel.Visible  = (tab == "Binds")
     speedPanel.Visible  = (tab == "Speed")
     statesPanel.Visible = (tab == "States")
+    limbsPanel.Visible  = (tab == "Limbs")
+    recordPanel.Visible = (tab == "Record")
 
     if tab == "Reanims" or tab == "Favs" then
         populateList()
     elseif tab == "Binds" then
         populateBindsList()
+    elseif tab == "Limbs" then
+        updateLimbsUI()
+    elseif tab == "Record" then
+        updateRecordUI()
     end
 end
 
-for tName, tb in pairs(tabButtons) do
-    tb.MouseButton1Click:Connect(function()
+for tName, data in pairs(tabButtons) do
+    data.btn.MouseButton1Click:Connect(function()
         switchTab(tName)
     end)
 end

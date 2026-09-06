@@ -43,6 +43,8 @@ local zen = {
 	};
 };
 
+_G.hiddenBodyParts = _G.hiddenBodyParts or {}
+
 local part_names = {
 	"Head",
 	"UpperTorso",
@@ -491,6 +493,27 @@ API._reanimate_internal = function(bool, remote, args)
 		-- 3-STAGE SYNCHRONIZATION PIPELINE
 		-- ════════════════════════════════════════════════════════════════
 
+		local function is_part_hidden(entry, fake_char)
+			if not _G.hiddenBodyParts then return false end
+			if _G.hiddenBodyParts[entry.name] then return true end
+			if _G.hiddenBodyParts["Head"] then
+				local fP = entry.fake
+				if fP and fP.Parent and fP.Parent:IsA("Accessory") then
+					local att = fP:FindFirstChildOfClass("Attachment")
+					if att and (att.Name:find("Hat") or att.Name:find("Hair") or att.Name:find("Face") or att.Name:find("Head")) then
+						return true
+					else
+						local weld = fP:FindFirstChildOfClass("Weld") or fP:FindFirstChildOfClass("WeldConstraint") or fP:FindFirstChildOfClass("Motor6D")
+						local head = fake_char and fake_char:FindFirstChild("Head")
+						if weld and head and (weld.Part1 == head or weld.Part0 == head) then
+							return true
+						end
+					end
+				end
+			end
+			return false
+		end
+
 		-- 1. Stepped (PreSimulation): Maintain noclip and neutral humanoid state before physics step
 		zen.connections.stepped = zen.services.run_service.Stepped:Connect(function()
 			if not (real_char and real_char.Parent and cloned_char and cloned_char.Parent) then return end
@@ -503,7 +526,11 @@ API._reanimate_internal = function(bool, remote, args)
 				local fP = entry.fake
 				if rP and fP and rP.Parent and fP.Parent then
 					rP.CanCollide = false
-					rP.CFrame = fP.CFrame
+					if is_part_hidden(entry, cloned_char) then
+						rP.CFrame = CFrame.new(0, 10000, 0)
+					else
+						rP.CFrame = fP.CFrame
+					end
 				end
 			end
 		end)
@@ -526,13 +553,18 @@ API._reanimate_internal = function(bool, remote, args)
 				if rP and fP and rP.Parent and fP.Parent then
 					rP.Anchored = false
 					rP.CanCollide = false
-					rP.CFrame = fP.CFrame
-
-					local pVel = fP.AssemblyLinearVelocity or fHrpVel
-					local pAngVel = fP.AssemblyAngularVelocity or fHrpAngVel
-					local smoothVel = (pVel.Magnitude > 0.05) and pVel or Vector3.new(0, -0.01, 0)
-					rP.AssemblyLinearVelocity = smoothVel
-					rP.AssemblyAngularVelocity = pAngVel
+					if is_part_hidden(entry, cloned_char) then
+						rP.CFrame = CFrame.new(0, 10000, 0)
+						rP.AssemblyLinearVelocity = Vector3.zero
+						rP.AssemblyAngularVelocity = Vector3.zero
+					else
+						rP.CFrame = fP.CFrame
+						local pVel = fP.AssemblyLinearVelocity or fHrpVel
+						local pAngVel = fP.AssemblyAngularVelocity or fHrpAngVel
+						local smoothVel = (pVel.Magnitude > 0.05) and pVel or Vector3.new(0, -0.01, 0)
+						rP.AssemblyLinearVelocity = smoothVel
+						rP.AssemblyAngularVelocity = pAngVel
+					end
 				end
 			end
 		end)
@@ -556,7 +588,11 @@ API._reanimate_internal = function(bool, remote, args)
 				local rP = entry.real
 				local fP = entry.fake
 				if rP and fP and rP.Parent and fP.Parent then
-					rP.CFrame = fP.CFrame
+					if is_part_hidden(entry, cloned_char) then
+						rP.CFrame = CFrame.new(0, 10000, 0)
+					else
+						rP.CFrame = fP.CFrame
+					end
 				end
 			end
 		end)
@@ -799,7 +835,11 @@ API.play_animation = function(url, speed)
 	local keyframe_data = anim.cache[url];
 	if not keyframe_data then
 		local response
-		if url:sub(1, 4) == "http" then
+		if typeof(url) == "table" then
+			keyframe_data = url
+		elseif typeof(url) == "string" and (url:find("^%s*return") or url:find("^%s*{") or url:find("^%s*%-%-")) then
+			response = url
+		elseif typeof(url) == "string" and url:sub(1, 4) == "http" then
 			local cache_path
 			if isfolder and makefolder and isfile and readfile and writefile then
 				if not isfolder("ZenAnimCache") then
@@ -1066,5 +1106,27 @@ API.preload_animation = function(url)
 		end
 	end
 end
+
+--- Sets visibility state for a specific body part (Head, Torso, Arms, Legs)
+API.set_limb_visibility = function(partName, visible)
+	_G.hiddenBodyParts = _G.hiddenBodyParts or {}
+	if visible then
+		_G.hiddenBodyParts[partName] = nil
+	else
+		_G.hiddenBodyParts[partName] = true
+	end
+end;
+
+--- Checks if a body part is currently set to hidden
+API.is_limb_hidden = function(partName)
+	return (_G.hiddenBodyParts and _G.hiddenBodyParts[partName] == true) or false
+end;
+
+--- Restores visibility for all hidden body parts
+API.unhide_all_limbs = function()
+	if _G.hiddenBodyParts then
+		table.clear(_G.hiddenBodyParts)
+	end
+end;
 
 return API;
