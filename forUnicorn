@@ -493,7 +493,7 @@ local function evaluateAndPoseAvatar(globalTime)
 end
 
 -- ══════════════════════════════════════════════════════════════════
--- 5. ROOT GUI SETUP & VIEWPORT HUD SYSTEM
+-- 5. ROOT GUI SETUP & ULTRA-SLEEK VIEWPORT HUD
 -- ==================================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "UnicornStudioTimelineEditor"
@@ -522,122 +522,62 @@ mainFrame.BorderSizePixel = 0
 mainFrame.Active = false
 mainFrame.Parent = screenGui
 
--- ==================================================================
--- 6. TOP FLOATING BRAND & WINDOW BAR
--- ==================================================================
-local topBar = Instance.new("Frame")
-topBar.Name = "TopHUDBar"
-topBar.Size = UDim2.new(1, -20, 0, 36)
-topBar.Position = UDim2.new(0, 10, 0, 8)
-topBar.BackgroundColor3 = C.bg1
-topBar.BorderSizePixel = 0
-topBar.Active = true
-topBar.Parent = mainFrame
-applyCorner(topBar, 8)
-applyStroke(topBar, C.glassBorder, 1, 0.4)
+-- Forward declarations for HUD State & Animation Controller
+local toggleStudioHUD
+local isHUDVisible = true
+local isLibCollapsed = false
+local isInspCollapsed = false
+local isTweening = false
 
--- Studio Brand Title (Sleek Reanim 1.8 Typography & Accent Underline)
-local titleContainer = Instance.new("Frame")
-titleContainer.Size = UDim2.new(0, 240, 1, 0)
-titleContainer.BackgroundTransparency = 1
-titleContainer.Position = UDim2.new(0, 14, 0, 0)
-titleContainer.Parent = topBar
+-- Ultra-Sleek Floating Restore Pill (Appears when HUD is minimized / toggled off)
+local floatingPill = Instance.new("TextButton")
+floatingPill.Name = "FloatingRestorePill"
+floatingPill.Size = UDim2.new(0, 230, 0, 26)
+floatingPill.AnchorPoint = Vector2.new(0.5, 0)
+floatingPill.Position = UDim2.new(0.5, 0, 0, -50) -- Hidden above screen initially
+floatingPill.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
+floatingPill.BackgroundTransparency = 0.15
+floatingPill.Text = ""
+floatingPill.AutoButtonColor = false
+floatingPill.ZIndex = 80
+floatingPill.Visible = false
+floatingPill.Parent = mainFrame
+applyCorner(floatingPill, 13)
+applyStroke(floatingPill, C.glassBorder, 1, 0.4)
 
-local studioTitle = Instance.new("TextLabel")
-studioTitle.Size = UDim2.new(1, 0, 1, -4)
-studioTitle.Position = UDim2.new(0, 0, 0, 0)
-studioTitle.BackgroundTransparency = 1
-studioTitle.Text = "UNICORN'S STUDIO // TIMELINE"
-studioTitle.TextColor3 = C.accent
-studioTitle.Font = Enum.Font.GothamBold
-studioTitle.TextSize = 11
-studioTitle.TextXAlignment = Enum.TextXAlignment.Left
-studioTitle.Parent = titleContainer
+local pillGlowDot = Instance.new("Frame")
+pillGlowDot.Size = UDim2.new(0, 6, 0, 6)
+pillGlowDot.AnchorPoint = Vector2.new(0, 0.5)
+pillGlowDot.Position = UDim2.new(0, 10, 0.5, 0)
+pillGlowDot.BackgroundColor3 = C.accent
+pillGlowDot.BorderSizePixel = 0
+pillGlowDot.ZIndex = 81
+pillGlowDot.Parent = floatingPill
+applyCorner(pillGlowDot, 3)
 
--- Signature Reanim 1.8 magenta accent underline
-local titleDiv = Instance.new("Frame")
-titleDiv.Parent = titleContainer
-titleDiv.BackgroundColor3 = C.glassBorder
-titleDiv.BackgroundTransparency = 0.3
-titleDiv.BorderSizePixel = 0
-titleDiv.Position = UDim2.new(0, 0, 1, -6)
-titleDiv.Size = UDim2.new(0, 75, 0, 2)
-titleDiv.ZIndex = 33
-
--- Top Center subtle viewport badge
-local vpBadge = Instance.new("TextLabel")
-vpBadge.Size = UDim2.new(0, 200, 1, 0)
-vpBadge.Position = UDim2.new(0.5, -100, 0, 0)
-vpBadge.BackgroundTransparency = 1
-vpBadge.Text = "VIEWPORT ACTIVE"
-vpBadge.TextColor3 = C.border
-vpBadge.Font = Enum.Font.Code
-vpBadge.TextSize = 9
-vpBadge.Parent = topBar
-
--- Reanim 1.8 Window Controls (Yellow Minimize Dot + Red Close Dot)
-local windowControls = Instance.new("Frame")
-windowControls.Size = UDim2.new(0, 56, 1, 0)
-windowControls.Position = UDim2.new(1, -64, 0, 0)
-windowControls.BackgroundTransparency = 1
-windowControls.Parent = topBar
-
-local minimizeBtn = Instance.new("TextButton")
-minimizeBtn.Name = "MinimizeBtn"
-minimizeBtn.BackgroundColor3 = C.yellow
-minimizeBtn.BorderSizePixel = 0
-minimizeBtn.AnchorPoint = Vector2.new(1, 0.5)
-minimizeBtn.Position = UDim2.new(1, -24, 0.5, 0)
-minimizeBtn.Size = UDim2.new(0, 14, 0, 14)
-minimizeBtn.Text = ""
-minimizeBtn.AutoButtonColor = false
-minimizeBtn.Parent = windowControls
-applyCorner(minimizeBtn, 7)
-
-local closeBtn = Instance.new("TextButton")
-closeBtn.Name = "CloseBtn"
-closeBtn.BackgroundColor3 = C.red
-closeBtn.BorderSizePixel = 0
-closeBtn.AnchorPoint = Vector2.new(1, 0.5)
-closeBtn.Position = UDim2.new(1, -4, 0.5, 0)
-closeBtn.Size = UDim2.new(0, 14, 0, 14)
-closeBtn.Text = ""
-closeBtn.AutoButtonColor = false
-closeBtn.Parent = windowControls
-applyCorner(closeBtn, 7)
-
-closeBtn.MouseButton1Click:Connect(function()
-    Timeline.isPlaying = false
-    Timeline.isHoldingPose = false
-    if Timeline.playbackConn then
-        Timeline.playbackConn:Disconnect()
-        Timeline.playbackConn = nil
-    end
-    if steppedConn then
-        steppedConn:Disconnect()
-        steppedConn = nil
-    end
-    pcall(function()
-        local targetChar = (api and api.get_clone and api.get_clone()) or player.Character
-        if targetChar then
-            local animScript = targetChar:FindFirstChild("Animate")
-            if animScript then
-                animScript.Disabled = false
-            end
-        end
-    end)
-    screenGui:Destroy()
-end)
+local pillTitle = Instance.new("TextLabel")
+pillTitle.Size = UDim2.new(1, -26, 1, 0)
+pillTitle.Position = UDim2.new(0, 22, 0, 0)
+pillTitle.BackgroundTransparency = 1
+pillTitle.Text = "UNICORN'S STUDIO // [RightShift]"
+pillTitle.TextColor3 = C.accentSoft
+pillTitle.Font = Enum.Font.GothamBold
+pillTitle.TextSize = 9
+pillTitle.TextXAlignment = Enum.TextXAlignment.Left
+pillTitle.ZIndex = 81
+pillTitle.Parent = floatingPill
 
 -- ==================================================================
--- 7. DOCKED PANELS: LEFT (LIBRARY), RIGHT (INSPECTOR), BOTTOM (TIMELINE)
+-- 6. DOCKED PANELS: LEFT (LIBRARY), RIGHT (INSPECTOR), BOTTOM (TIMELINE)
 -- ==================================================================
 
--- [LEFT DOCK] ANIMATION MEDIA LIBRARY (Sliding Interactive Sidebar)
+-- ------------------------------------------------------------------
+-- [LEFT DOCK] ANIMATION MEDIA LIBRARY WITH TABS & BRAND HEADER
+-- ------------------------------------------------------------------
 local libraryPanel = Instance.new("Frame")
 libraryPanel.Name = "LibraryPanel"
-libraryPanel.Size = UDim2.new(0, 240, 1, -196)
-libraryPanel.Position = UDim2.new(0, 10, 0, 48)
+libraryPanel.Size = UDim2.new(0, 246, 1, -164)
+libraryPanel.Position = UDim2.new(0, 12, 0, 14)
 libraryPanel.BackgroundColor3 = C.panelBg
 libraryPanel.BorderSizePixel = 0
 libraryPanel.ClipsDescendants = true
@@ -646,27 +586,75 @@ libraryPanel.Parent = mainFrame
 applyCorner(libraryPanel, 8)
 applyStroke(libraryPanel, C.glassBorder, 1, 0.4)
 
-local libHeader = Instance.new("TextLabel")
-libHeader.Size = UDim2.new(1, -40, 0, 32)
-libHeader.Position = UDim2.new(0, 12, 0, 2)
-libHeader.BackgroundTransparency = 1
-libHeader.Text = "MEDIA LIBRARY"
-libHeader.TextColor3 = C.accentSoft
-libHeader.Font = Enum.Font.GothamBold
-libHeader.TextSize = 10
-libHeader.TextXAlignment = Enum.TextXAlignment.Left
-libHeader.Parent = libraryPanel
+-- Brand Header Bar inside Left Panel (Replaces full-width top bar!)
+local libTopBar = Instance.new("Frame")
+libTopBar.Size = UDim2.new(1, 0, 0, 36)
+libTopBar.Position = UDim2.new(0, 0, 0, 0)
+libTopBar.BackgroundTransparency = 1
+libTopBar.Parent = libraryPanel
+
+local studioTitle = Instance.new("TextLabel")
+studioTitle.Size = UDim2.new(0, 140, 1, -4)
+studioTitle.Position = UDim2.new(0, 12, 0, 2)
+studioTitle.BackgroundTransparency = 1
+studioTitle.Text = "UNICORN'S STUDIO"
+studioTitle.TextColor3 = C.accent
+studioTitle.Font = Enum.Font.GothamBold
+studioTitle.TextSize = 10
+studioTitle.TextXAlignment = Enum.TextXAlignment.Left
+studioTitle.Parent = libTopBar
+
+local titleDiv = Instance.new("Frame")
+titleDiv.Parent = libTopBar
+titleDiv.BackgroundColor3 = C.glassBorder
+titleDiv.BackgroundTransparency = 0.3
+titleDiv.BorderSizePixel = 0
+titleDiv.Position = UDim2.new(0, 12, 1, -6)
+titleDiv.Size = UDim2.new(0, 68, 0, 2)
+titleDiv.ZIndex = 33
+
+-- Window Controls (Yellow Minimize Dot + Red Close Dot + Side Collapse Button)
+local windowControls = Instance.new("Frame")
+windowControls.Size = UDim2.new(0, 80, 1, 0)
+windowControls.Position = UDim2.new(1, -84, 0, 0)
+windowControls.BackgroundTransparency = 1
+windowControls.Parent = libTopBar
+
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Name = "MinimizeBtn"
+minimizeBtn.BackgroundColor3 = C.yellow
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.AnchorPoint = Vector2.new(0, 0.5)
+minimizeBtn.Position = UDim2.new(0, 10, 0.5, 0)
+minimizeBtn.Size = UDim2.new(0, 12, 0, 12)
+minimizeBtn.Text = ""
+minimizeBtn.AutoButtonColor = false
+minimizeBtn.Parent = windowControls
+applyCorner(minimizeBtn, 6)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Name = "CloseBtn"
+closeBtn.BackgroundColor3 = C.red
+closeBtn.BorderSizePixel = 0
+closeBtn.AnchorPoint = Vector2.new(0, 0.5)
+closeBtn.Position = UDim2.new(0, 28, 0.5, 0)
+closeBtn.Size = UDim2.new(0, 12, 0, 12)
+closeBtn.Text = ""
+closeBtn.AutoButtonColor = false
+closeBtn.Parent = windowControls
+applyCorner(closeBtn, 6)
 
 local btnSlideCollapseLib = Instance.new("TextButton")
 btnSlideCollapseLib.Name = "CollapseLibraryBtn"
-btnSlideCollapseLib.Size = UDim2.new(0, 22, 0, 20)
-btnSlideCollapseLib.Position = UDim2.new(1, -28, 0, 8)
+btnSlideCollapseLib.Size = UDim2.new(0, 20, 0, 20)
+btnSlideCollapseLib.AnchorPoint = Vector2.new(0, 0.5)
+btnSlideCollapseLib.Position = UDim2.new(0, 48, 0.5, 0)
 btnSlideCollapseLib.BackgroundColor3 = C.bg3
 btnSlideCollapseLib.Text = "<"
 btnSlideCollapseLib.TextColor3 = C.accentSoft
 btnSlideCollapseLib.Font = Enum.Font.GothamBold
 btnSlideCollapseLib.TextSize = 10
-btnSlideCollapseLib.Parent = libraryPanel
+btnSlideCollapseLib.Parent = windowControls
 applyCorner(btnSlideCollapseLib, 4)
 applyStroke(btnSlideCollapseLib, C.border, 1, 0.5)
 
@@ -687,30 +675,105 @@ btnSlideExpandLib.Parent = mainFrame
 applyCorner(btnSlideExpandLib, 4)
 applyStroke(btnSlideExpandLib, C.glassBorder, 1, 0.4)
 
+-- Header Divider Line
+local libHeaderDiv = Instance.new("Frame")
+libHeaderDiv.Size = UDim2.new(1, -20, 0, 1)
+libHeaderDiv.Position = UDim2.new(0, 10, 0, 36)
+libHeaderDiv.BackgroundColor3 = C.divider
+libHeaderDiv.BorderSizePixel = 0
+libHeaderDiv.Parent = libraryPanel
+
+-- Category Filter Tabs Strip (Sleeker Tabs UI!)
+local libTabsStrip = Instance.new("Frame")
+libTabsStrip.Name = "CategoryTabs"
+libTabsStrip.Size = UDim2.new(1, -20, 0, 24)
+libTabsStrip.Position = UDim2.new(0, 10, 0, 42)
+libTabsStrip.BackgroundTransparency = 1
+libTabsStrip.Parent = libraryPanel
+
+local activeCategoryFilter = "All"
+local populateMediaLibrary -- Forward declaration
+
+local function createCategoryTab(label, filterKey, posX, width)
+    local tab = Instance.new("TextButton")
+    tab.Size = UDim2.new(0, width, 1, 0)
+    tab.Position = UDim2.new(0, posX, 0, 0)
+    tab.BackgroundColor3 = (activeCategoryFilter == filterKey) and Color3.fromRGB(50, 18, 42) or C.bg2
+    tab.Text = label
+    tab.TextColor3 = (activeCategoryFilter == filterKey) and C.accentSoft or C.text3
+    tab.Font = Enum.Font.GothamBold
+    tab.TextSize = 9
+    tab.Parent = libTabsStrip
+    applyCorner(tab, 4)
+    local stroke = applyStroke(tab, (activeCategoryFilter == filterKey) and C.glassBorder or C.border, 1, 0.4)
+
+    return tab, stroke
+end
+
+local tabBtnAll, tabStrokeAll = createCategoryTab("ALL", "All", 0, 68)
+local tabBtnUnicorn, tabStrokeUnicorn = createCategoryTab("UNICORN", "Unicorns", 72, 80)
+local tabBtnCustom, tabStrokeCustom = createCategoryTab("CUSTOM", "Custom", 156, 70)
+
+local function updateCategoryTabsUI()
+    local isAll = (activeCategoryFilter == "All")
+    tabBtnAll.BackgroundColor3 = isAll and Color3.fromRGB(50, 18, 42) or C.bg2
+    tabBtnAll.TextColor3 = isAll and C.accentSoft or C.text3
+    tabStrokeAll.Color = isAll and C.glassBorder or C.border
+
+    local isUni = (activeCategoryFilter == "Unicorns")
+    tabBtnUnicorn.BackgroundColor3 = isUni and Color3.fromRGB(50, 18, 42) or C.bg2
+    tabBtnUnicorn.TextColor3 = isUni and C.accentSoft or C.text3
+    tabStrokeUnicorn.Color = isUni and C.glassBorder or C.border
+
+    local isCus = (activeCategoryFilter == "Custom")
+    tabBtnCustom.BackgroundColor3 = isCus and Color3.fromRGB(50, 18, 42) or C.bg2
+    tabBtnCustom.TextColor3 = isCus and C.accentSoft or C.text3
+    tabStrokeCustom.Color = isCus and C.glassBorder or C.border
+end
+
 -- Search Box in Library
 local libSearch = Instance.new("TextBox")
-libSearch.Size = UDim2.new(1, -24, 0, 28)
-libSearch.Position = UDim2.new(0, 12, 0, 36)
+libSearch.Size = UDim2.new(1, -20, 0, 26)
+libSearch.Position = UDim2.new(0, 10, 0, 72)
 libSearch.BackgroundColor3 = C.input
 libSearch.PlaceholderText = "Search animations..."
 libSearch.PlaceholderColor3 = C.textMuted
 libSearch.Text = ""
 libSearch.TextColor3 = C.text
 libSearch.Font = Enum.Font.GothamMedium
-libSearch.TextSize = 11
+libSearch.TextSize = 10
 libSearch.TextXAlignment = Enum.TextXAlignment.Left
 libSearch.ClearTextOnFocus = false
 libSearch.Parent = libraryPanel
-applyCorner(libSearch, 6)
+applyCorner(libSearch, 5)
 applyStroke(libSearch, C.divider, 1, 0)
 local libSearchPad = Instance.new("UIPadding")
 libSearchPad.PaddingLeft = UDim.new(0, 8)
 libSearchPad.Parent = libSearch
 
+-- Tab click connections
+tabBtnAll.MouseButton1Click:Connect(function()
+    activeCategoryFilter = "All"
+    updateCategoryTabsUI()
+    if populateMediaLibrary then populateMediaLibrary(libSearch.Text) end
+end)
+
+tabBtnUnicorn.MouseButton1Click:Connect(function()
+    activeCategoryFilter = "Unicorns"
+    updateCategoryTabsUI()
+    if populateMediaLibrary then populateMediaLibrary(libSearch.Text) end
+end)
+
+tabBtnCustom.MouseButton1Click:Connect(function()
+    activeCategoryFilter = "Custom"
+    updateCategoryTabsUI()
+    if populateMediaLibrary then populateMediaLibrary(libSearch.Text) end
+end)
+
 -- Library Scroll List
 local libScroll = Instance.new("ScrollingFrame")
-libScroll.Size = UDim2.new(1, -20, 1, -114)
-libScroll.Position = UDim2.new(0, 10, 0, 72)
+libScroll.Size = UDim2.new(1, -20, 1, -142)
+libScroll.Position = UDim2.new(0, 10, 0, 104)
 libScroll.BackgroundTransparency = 1
 libScroll.BorderSizePixel = 0
 libScroll.ScrollBarThickness = 3
@@ -726,26 +789,25 @@ libLayout.Parent = libScroll
 
 -- Bottom + Import Script button
 local btnImportCustom = Instance.new("TextButton")
-btnImportCustom.Size = UDim2.new(1, -24, 0, 28)
-btnImportCustom.Position = UDim2.new(0, 12, 1, -34)
+btnImportCustom.Size = UDim2.new(1, -20, 0, 26)
+btnImportCustom.Position = UDim2.new(0, 10, 1, -32)
 btnImportCustom.BackgroundColor3 = C.bg2
 btnImportCustom.Text = "+ Import Custom Script"
 btnImportCustom.TextColor3 = C.accent
 btnImportCustom.Font = Enum.Font.GothamBold
 btnImportCustom.TextSize = 10
 btnImportCustom.Parent = libraryPanel
-applyCorner(btnImportCustom, 6)
+applyCorner(btnImportCustom, 5)
 applyStroke(btnImportCustom, C.divider, 1, 0.3)
 
 -- Left library slide collapse/expand logic
-local isLibCollapsed = false
 btnSlideCollapseLib.MouseButton1Click:Connect(function()
     if isLibCollapsed then return end
     isLibCollapsed = true
-    local ti = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    TweenService:Create(libraryPanel, ti, {Position = UDim2.new(0, -250, 0, 48)}):Play()
+    local ti = TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    TweenService:Create(libraryPanel, ti, {Position = UDim2.new(0, -260, 0, 14)}):Play()
     task.delay(0.18, function()
-        if isLibCollapsed then
+        if isLibCollapsed and isHUDVisible then
             btnSlideExpandLib.Visible = true
         end
     end)
@@ -755,8 +817,8 @@ btnSlideExpandLib.MouseButton1Click:Connect(function()
     if not isLibCollapsed then return end
     isLibCollapsed = false
     btnSlideExpandLib.Visible = false
-    local ti = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    TweenService:Create(libraryPanel, ti, {Position = UDim2.new(0, 10, 0, 48)}):Play()
+    local ti = TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    TweenService:Create(libraryPanel, ti, {Position = UDim2.new(0, 12, 0, 14)}):Play()
 end)
 
 -- ------------------------------------------------------------------
@@ -764,8 +826,8 @@ end)
 -- ------------------------------------------------------------------
 local inspectorFrame = Instance.new("Frame")
 inspectorFrame.Name = "InspectorPanel"
-inspectorFrame.Size = UDim2.new(0, 270, 1, -196)
-inspectorFrame.Position = UDim2.new(1, -280, 0, 48)
+inspectorFrame.Size = UDim2.new(0, 270, 1, -164)
+inspectorFrame.Position = UDim2.new(1, -282, 0, 14)
 inspectorFrame.BackgroundColor3 = C.panelBg
 inspectorFrame.BorderSizePixel = 0
 inspectorFrame.ClipsDescendants = true
@@ -774,27 +836,46 @@ inspectorFrame.Parent = mainFrame
 applyCorner(inspectorFrame, 8)
 applyStroke(inspectorFrame, C.glassBorder, 1, 0.4)
 
+local inspTopBar = Instance.new("Frame")
+inspTopBar.Size = UDim2.new(1, 0, 0, 36)
+inspTopBar.Position = UDim2.new(0, 0, 0, 0)
+inspTopBar.BackgroundTransparency = 1
+inspTopBar.Parent = inspectorFrame
+
+local inspHeaderBadge = Instance.new("TextLabel")
+inspHeaderBadge.Size = UDim2.new(0, 76, 0, 18)
+inspHeaderBadge.Position = UDim2.new(0, 10, 0.5, -9)
+inspHeaderBadge.BackgroundColor3 = Color3.fromRGB(45, 18, 38)
+inspHeaderBadge.Text = "INSPECTOR"
+inspHeaderBadge.TextColor3 = C.accentSoft
+inspHeaderBadge.Font = Enum.Font.GothamBold
+inspHeaderBadge.TextSize = 9
+inspHeaderBadge.Parent = inspTopBar
+applyCorner(inspHeaderBadge, 4)
+applyStroke(inspHeaderBadge, C.glassBorder, 1, 0.4)
+
 local inspHeader = Instance.new("TextLabel")
-inspHeader.Size = UDim2.new(1, -40, 0, 32)
-inspHeader.Position = UDim2.new(0, 12, 0, 2)
+inspHeader.Size = UDim2.new(0, 110, 1, 0)
+inspHeader.Position = UDim2.new(0, 92, 0, 0)
 inspHeader.BackgroundTransparency = 1
-inspHeader.Text = "CLIP INSPECTOR"
-inspHeader.TextColor3 = C.accentSoft
+inspHeader.Text = "CLIP SETTINGS"
+inspHeader.TextColor3 = C.text2
 inspHeader.Font = Enum.Font.GothamBold
 inspHeader.TextSize = 10
 inspHeader.TextXAlignment = Enum.TextXAlignment.Left
-inspHeader.Parent = inspectorFrame
+inspHeader.Parent = inspTopBar
 
 local btnSlideCollapseInsp = Instance.new("TextButton")
 btnSlideCollapseInsp.Name = "CollapseInspectorBtn"
-btnSlideCollapseInsp.Size = UDim2.new(0, 22, 0, 20)
-btnSlideCollapseInsp.Position = UDim2.new(1, -28, 0, 8)
+btnSlideCollapseInsp.Size = UDim2.new(0, 20, 0, 20)
+btnSlideCollapseInsp.AnchorPoint = Vector2.new(1, 0.5)
+btnSlideCollapseInsp.Position = UDim2.new(1, -10, 0.5, 0)
 btnSlideCollapseInsp.BackgroundColor3 = C.bg3
 btnSlideCollapseInsp.Text = ">"
 btnSlideCollapseInsp.TextColor3 = C.accentSoft
 btnSlideCollapseInsp.Font = Enum.Font.GothamBold
 btnSlideCollapseInsp.TextSize = 10
-btnSlideCollapseInsp.Parent = inspectorFrame
+btnSlideCollapseInsp.Parent = inspTopBar
 applyCorner(btnSlideCollapseInsp, 4)
 applyStroke(btnSlideCollapseInsp, C.border, 1, 0.5)
 
@@ -815,14 +896,13 @@ btnSlideExpandInsp.Parent = mainFrame
 applyCorner(btnSlideExpandInsp, 4)
 applyStroke(btnSlideExpandInsp, C.glassBorder, 1, 0.4)
 
-local isInspCollapsed = false
 btnSlideCollapseInsp.MouseButton1Click:Connect(function()
     if isInspCollapsed then return end
     isInspCollapsed = true
-    local ti = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    TweenService:Create(inspectorFrame, ti, {Position = UDim2.new(1, 10, 0, 48)}):Play()
+    local ti = TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    TweenService:Create(inspectorFrame, ti, {Position = UDim2.new(1, 10, 0, 14)}):Play()
     task.delay(0.18, function()
-        if isInspCollapsed then
+        if isInspCollapsed and isHUDVisible then
             btnSlideExpandInsp.Visible = true
         end
     end)
@@ -832,14 +912,14 @@ btnSlideExpandInsp.MouseButton1Click:Connect(function()
     if not isInspCollapsed then return end
     isInspCollapsed = false
     btnSlideExpandInsp.Visible = false
-    local ti = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    TweenService:Create(inspectorFrame, ti, {Position = UDim2.new(1, -280, 0, 48)}):Play()
+    local ti = TweenInfo.new(0.24, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    TweenService:Create(inspectorFrame, ti, {Position = UDim2.new(1, -282, 0, 14)}):Play()
 end)
 
 -- Inspector Divider Line
 local inspHeaderDiv = Instance.new("Frame")
 inspHeaderDiv.Size = UDim2.new(1, -20, 0, 1)
-inspHeaderDiv.Position = UDim2.new(0, 10, 0, 34)
+inspHeaderDiv.Position = UDim2.new(0, 10, 0, 36)
 inspHeaderDiv.BackgroundColor3 = C.divider
 inspHeaderDiv.BorderSizePixel = 0
 inspHeaderDiv.Parent = inspectorFrame
@@ -860,7 +940,7 @@ inspEmptyLabel.Parent = inspectorFrame
 -- Active Inspector Container (Scrolling container for vertical inspector)
 local inspContent = Instance.new("ScrollingFrame")
 inspContent.Size = UDim2.new(1, -16, 1, -40)
-inspContent.Position = UDim2.new(0, 8, 0, 36)
+inspContent.Position = UDim2.new(0, 8, 0, 38)
 inspContent.BackgroundTransparency = 1
 inspContent.BorderSizePixel = 0
 inspContent.ScrollBarThickness = 3
@@ -1169,8 +1249,8 @@ local transitionPresetList = {
 -- ------------------------------------------------------------------
 local timelineSection = Instance.new("Frame")
 timelineSection.Name = "TimelineBottomPanel"
-timelineSection.Size = UDim2.new(1, -20, 0, 134)
-timelineSection.Position = UDim2.new(0, 10, 1, -140)
+timelineSection.Size = UDim2.new(1, -24, 0, 134)
+timelineSection.Position = UDim2.new(0, 12, 1, -142)
 timelineSection.BackgroundColor3 = C.bg0
 timelineSection.BorderSizePixel = 0
 timelineSection.ClipsDescendants = true
@@ -1397,16 +1477,93 @@ emptyTrackLabel.TextXAlignment = Enum.TextXAlignment.Left
 emptyTrackLabel.Visible = true
 emptyTrackLabel.Parent = trackLane
 
--- Studio Master Minimize Toggle (Yellow dot)
-local isStudioMinimized = false
-minimizeBtn.MouseButton1Click:Connect(function()
-    isStudioMinimized = not isStudioMinimized
-    local visible = not isStudioMinimized
-    libraryPanel.Visible = visible and (not isLibCollapsed)
-    inspectorFrame.Visible = visible and (not isInspCollapsed)
-    timelineSection.Visible = visible
-    btnSlideExpandLib.Visible = visible and isLibCollapsed
-    btnSlideExpandInsp.Visible = visible and isInspCollapsed
+-- ==================================================================
+-- 7. SLEEK IN / OUT HUD TOGGLE SYSTEM & KEYBIND
+-- ==================================================================
+toggleStudioHUD = function()
+    if isTweening then return end
+    isTweening = true
+    isHUDVisible = not isHUDVisible
+
+    local ti = TweenInfo.new(0.34, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+
+    if isHUDVisible then
+        -- Animate panels back into view smoothly
+        floatingPill:TweenPosition(UDim2.new(0.5, 0, 0, -50), Enum.EasingDirection.In, Enum.EasingStyle.Quad, 0.22, true, function()
+            floatingPill.Visible = false
+        end)
+
+        if not isLibCollapsed then
+            TweenService:Create(libraryPanel, ti, {Position = UDim2.new(0, 12, 0, 14)}):Play()
+        else
+            btnSlideExpandLib.Visible = true
+            TweenService:Create(btnSlideExpandLib, ti, {Position = UDim2.new(0, 2, 0.5, -27)}):Play()
+        end
+
+        if not isInspCollapsed then
+            TweenService:Create(inspectorFrame, ti, {Position = UDim2.new(1, -282, 0, 14)}):Play()
+        else
+            btnSlideExpandInsp.Visible = true
+            TweenService:Create(btnSlideExpandInsp, ti, {Position = UDim2.new(1, -22, 0.5, -27)}):Play()
+        end
+
+        TweenService:Create(timelineSection, ti, {Position = UDim2.new(0, 12, 1, -142)}):Play()
+
+        task.delay(0.35, function() isTweening = false end)
+    else
+        -- Animate panels completely off-screen (Cinema Viewport Mode)
+        TweenService:Create(libraryPanel, ti, {Position = UDim2.new(0, -290, 0, 14)}):Play()
+        TweenService:Create(inspectorFrame, ti, {Position = UDim2.new(1, 30, 0, 14)}):Play()
+        TweenService:Create(timelineSection, ti, {Position = UDim2.new(0, 12, 1, 160)}):Play()
+
+        if isLibCollapsed then
+            TweenService:Create(btnSlideExpandLib, ti, {Position = UDim2.new(0, -30, 0.5, -27)}):Play()
+        end
+        if isInspCollapsed then
+            TweenService:Create(btnSlideExpandInsp, ti, {Position = UDim2.new(1, 10, 0.5, -27)}):Play()
+        end
+
+        floatingPill.Visible = true
+        floatingPill:TweenPosition(UDim2.new(0.5, 0, 0, 14), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.34, true)
+
+        task.delay(0.35, function() isTweening = false end)
+    end
+end
+
+-- Hook up yellow minimize dot and floating restore pill
+minimizeBtn.MouseButton1Click:Connect(toggleStudioHUD)
+floatingPill.MouseButton1Click:Connect(toggleStudioHUD)
+
+-- Global Toggle Keybinds: RightShift & F4
+UserInputService.InputBegan:Connect(function(input, gpe)
+    if gpe or UserInputService:GetFocusedTextBox() then return end
+    if input.KeyCode == Enum.KeyCode.RightShift or input.KeyCode == Enum.KeyCode.F4 then
+        toggleStudioHUD()
+    end
+end)
+
+-- Window Close Handler (Red Dot)
+closeBtn.MouseButton1Click:Connect(function()
+    Timeline.isPlaying = false
+    Timeline.isHoldingPose = false
+    if Timeline.playbackConn then
+        Timeline.playbackConn:Disconnect()
+        Timeline.playbackConn = nil
+    end
+    if steppedConn then
+        steppedConn:Disconnect()
+        steppedConn = nil
+    end
+    pcall(function()
+        local targetChar = (api and api.get_clone and api.get_clone()) or player.Character
+        if targetChar then
+            local animScript = targetChar:FindFirstChild("Animate")
+            if animScript then
+                animScript.Disabled = false
+            end
+        end
+    end)
+    screenGui:Destroy()
 end)
 
 -- 8. RENDER & INTERACTION ENGINE
@@ -2032,9 +2189,9 @@ btnDeleteClip.MouseButton1Click:Connect(function()
 end)
 
 -- ══════════════════════════════════════════════════════════════════
--- 11. MEDIA LIBRARY CONTROLLER (+ Add to Track)
--- ══════════════════════════════════════════════════════════════════
-local function populateMediaLibrary(filterText)
+-- 11. MEDIA LIBRARY CONTROLLER (+ Add to Track & Tab Filters)
+-- ==================================================================
+populateMediaLibrary = function(filterText)
     for _, c in ipairs(libScroll:GetChildren()) do
         if c:IsA("Frame") then c:Destroy() end
     end
@@ -2043,19 +2200,38 @@ local function populateMediaLibrary(filterText)
     local count = 0
 
     for _, item in ipairs(animationCatalog) do
-        if term == "" or item.name:lower():find(term, 1, true) then
+        -- Category filter check
+        local catMatch = true
+        if activeCategoryFilter == "Unicorns" then
+            catMatch = (item.category == "Unicorns") or (item.name:lower():find("unicorn", 1, true) ~= nil)
+        elseif activeCategoryFilter == "Custom" then
+            catMatch = item.isCustom or (item.category == "Custom")
+        end
+
+        local searchMatch = (term == "") or item.name:lower():find(term, 1, true)
+
+        if catMatch and searchMatch then
             count = count + 1
 
             local card = Instance.new("Frame")
-            card.Size = UDim2.new(1, -6, 0, 36)
+            card.Size = UDim2.new(1, -4, 0, 34)
             card.BackgroundColor3 = C.surface
             card.Parent = libScroll
             applyCorner(card, 5)
             applyStroke(card, C.divider, 1, 0.4)
 
+            -- Category Dot indicator
+            local catDot = Instance.new("Frame")
+            catDot.Size = UDim2.new(0, 5, 0, 5)
+            catDot.Position = UDim2.new(0, 8, 0.5, -2)
+            catDot.BackgroundColor3 = item.isCustom and Color3.fromRGB(100, 220, 255) or ((item.category == "Unicorns" or item.name:lower():find("unicorn", 1, true)) and C.accent or C.textMuted)
+            catDot.BorderSizePixel = 0
+            catDot.Parent = card
+            applyCorner(catDot, 3)
+
             local title = Instance.new("TextLabel")
-            title.Size = UDim2.new(1, -75, 1, 0)
-            title.Position = UDim2.new(0, 8, 0, 0)
+            title.Size = UDim2.new(1, -78, 1, 0)
+            title.Position = UDim2.new(0, 18, 0, 0)
             title.BackgroundTransparency = 1
             title.Text = item.name
             title.TextColor3 = item.isCustom and Color3.fromRGB(100, 220, 255) or C.text
@@ -2066,13 +2242,13 @@ local function populateMediaLibrary(filterText)
             title.Parent = card
 
             local btnAdd = Instance.new("TextButton")
-            btnAdd.Size = UDim2.new(0, 58, 0, 24)
-            btnAdd.Position = UDim2.new(1, -64, 0.5, -12)
+            btnAdd.Size = UDim2.new(0, 54, 0, 22)
+            btnAdd.Position = UDim2.new(1, -60, 0.5, -11)
             btnAdd.BackgroundColor3 = C.bg3
             btnAdd.Text = "+ Track"
             btnAdd.TextColor3 = C.accentSoft
             btnAdd.Font = Enum.Font.GothamBold
-            btnAdd.TextSize = 10
+            btnAdd.TextSize = 9
             btnAdd.Parent = card
             applyCorner(btnAdd, 4)
             applyStroke(btnAdd, C.glassBorder, 1, 0.5)
@@ -2114,7 +2290,7 @@ local function populateMediaLibrary(filterText)
                         btnAdd.TextColor3 = C.danger
                         task.delay(1.5, function()
                             btnAdd.Text = "+ Track"
-                            btnAdd.TextColor3 = C.accentBlue
+                            btnAdd.TextColor3 = C.accentSoft
                         end)
                     end
                 end)
@@ -2122,7 +2298,7 @@ local function populateMediaLibrary(filterText)
         end
     end
 
-    libScroll.CanvasSize = UDim2.new(0, 0, 0, count * 40)
+    libScroll.CanvasSize = UDim2.new(0, 0, 0, count * 38)
 end
 
 libSearch:GetPropertyChangedSignal("Text"):Connect(function()
@@ -2131,7 +2307,6 @@ end)
 
 populateMediaLibrary("")
 
--- ══════════════════════════════════════════════════════════════════
 -- 12. IMPORT CUSTOM SCRIPT MODAL
 -- ══════════════════════════════════════════════════════════════════
 local importModal = Instance.new("Frame")
