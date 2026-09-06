@@ -2556,6 +2556,20 @@ importSubmitBtn.MouseButton1Click:Connect(function()
     local n = importNameBox.Text:match("^%s*(.-)%s*$")
     local finalName = (n and n ~= "") and n or ("Imported_" .. tostring(#animationCatalog + 1))
 
+    pcall(function()
+        local CONFIG_FILE = "ZenReanimConfig.json"
+        local cfg = { customAnims = {} }
+        if isfile and isfile(CONFIG_FILE) then
+            local data = HttpService:JSONDecode(readfile(CONFIG_FILE))
+            if type(data) == "table" then cfg = data end
+        end
+        cfg.customAnims = cfg.customAnims or {}
+        table.insert(cfg.customAnims, { name = finalName, script = raw })
+        if writefile then
+            writefile(CONFIG_FILE, HttpService:JSONEncode(cfg))
+        end
+    end)
+
     table.insert(animationCatalog, {
         name = finalName,
         path = raw,
