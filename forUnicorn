@@ -593,7 +593,7 @@ local isTweening = false
 -- Ultra-Sleek Floating Restore Pill (Appears when HUD is minimized / toggled off)
 local floatingPill = Instance.new("TextButton")
 floatingPill.Name = "FloatingRestorePill"
-floatingPill.Size = UDim2.new(0, 244, 0, 26)
+floatingPill.Size = UDim2.new(0, 190, 0, 26)
 floatingPill.AnchorPoint = Vector2.new(0.5, 0)
 floatingPill.Position = UDim2.new(0.5, 0, 0, -50) -- Hidden above screen initially
 floatingPill.BackgroundColor3 = Color3.fromRGB(14, 14, 18)
@@ -620,7 +620,7 @@ local pillTitle = Instance.new("TextLabel")
 pillTitle.Size = UDim2.new(1, -26, 1, 0)
 pillTitle.Position = UDim2.new(0, 22, 0, 0)
 pillTitle.BackgroundTransparency = 1
-pillTitle.Text = "UNICORN'S STUDIO // [RightControl]"
+pillTitle.Text = "UNICORN'S STUDIO // [K]"
 pillTitle.TextColor3 = C.accentSoft
 pillTitle.Font = Enum.Font.GothamBold
 pillTitle.TextSize = 9
@@ -1625,10 +1625,10 @@ end
 minimizeBtn.MouseButton1Click:Connect(toggleStudioHUD)
 floatingPill.MouseButton1Click:Connect(toggleStudioHUD)
 
--- Global Toggle Keybind: RightControl (rightCtrl)
+-- Global Toggle Keybind: K
 UserInputService.InputBegan:Connect(function(input, gpe)
     if gpe or UserInputService:GetFocusedTextBox() then return end
-    if input.KeyCode == Enum.KeyCode.RightControl then
+    if input.KeyCode == Enum.KeyCode.K then
         toggleStudioHUD()
     end
 end)
