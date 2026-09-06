@@ -493,8 +493,8 @@ local function evaluateAndPoseAvatar(globalTime)
 end
 
 -- ══════════════════════════════════════════════════════════════════
--- 5. ROOT GUI SETUP
--- ══════════════════════════════════════════════════════════════════
+-- 5. ROOT GUI SETUP & VIEWPORT HUD SYSTEM
+-- ==================================================================
 local screenGui = Instance.new("ScreenGui")
 screenGui.Name = "UnicornStudioTimelineEditor"
 screenGui.ResetOnSpawn = false
@@ -511,72 +511,34 @@ pcall(function()
     end
 end)
 
-local _vpCam = workspace.CurrentCamera
-local _vpSize = _vpCam and _vpCam.ViewportSize or Vector2.new(1280, 720)
-local defaultStudioW = math.clamp(math.floor(_vpSize.X * 0.78), 740, 1160)
-local defaultStudioH = math.clamp(math.floor(_vpSize.Y * 0.80), 460, 720)
-
+-- Transparent Full-Screen Viewport HUD Container
+-- (100% transparent center so user's Roblox character performing reanims is completely visible!)
 local mainFrame = Instance.new("Frame")
-mainFrame.Name = "MainStudioFrame"
-mainFrame.Size = UDim2.new(0, defaultStudioW, 0, defaultStudioH)
-mainFrame.Position = UDim2.new(0.5, -math.floor(defaultStudioW / 2), 0.5, -math.floor(defaultStudioH / 2))
-mainFrame.BackgroundColor3 = C.bg0
+mainFrame.Name = "MainStudioHUD"
+mainFrame.Size = UDim2.new(1, 0, 1, 0)
+mainFrame.Position = UDim2.new(0, 0, 0, 0)
+mainFrame.BackgroundTransparency = 1
 mainFrame.BorderSizePixel = 0
-mainFrame.ClipsDescendants = true
-mainFrame.Active = true
+mainFrame.Active = false
 mainFrame.Parent = screenGui
-applyCorner(mainFrame, 10)
-applyStroke(mainFrame, C.glassBorder, 1.5, 0.5)
 
--- Responsive corner resize grip
-local resizeGrip = Instance.new("TextButton")
-resizeGrip.Name = "ResizeGrip"
-resizeGrip.Size = UDim2.new(0, 18, 0, 18)
-resizeGrip.Position = UDim2.new(1, -18, 1, -18)
-resizeGrip.BackgroundTransparency = 1
-resizeGrip.Text = "//"
-resizeGrip.TextColor3 = C.border
-resizeGrip.Font = Enum.Font.Code
-resizeGrip.TextSize = 11
-resizeGrip.ZIndex = 45
-resizeGrip.Parent = mainFrame
-
--- ══════════════════════════════════════════════════════════════════
--- 6. TOP TRANSPORT & CONTROL BAR
--- ══════════════════════════════════════════════════════════════════
+-- ==================================================================
+-- 6. TOP FLOATING BRAND & WINDOW BAR
+-- ==================================================================
 local topBar = Instance.new("Frame")
-topBar.Size = UDim2.new(1, 0, 0, 46)
+topBar.Name = "TopHUDBar"
+topBar.Size = UDim2.new(1, -20, 0, 36)
+topBar.Position = UDim2.new(0, 10, 0, 8)
 topBar.BackgroundColor3 = C.bg1
 topBar.BorderSizePixel = 0
+topBar.Active = true
 topBar.Parent = mainFrame
-applyStroke(topBar, C.border, 1, 0.6)
-
--- Draggable title bar
-local isDragging, dragStart, startPos = false, nil, nil
-topBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        isDragging = true
-        dragStart = input.Position
-        startPos = mainFrame.Position
-    end
-end)
-
-topBar.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        isDragging = false
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dragStart
-        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
+applyCorner(topBar, 8)
+applyStroke(topBar, C.glassBorder, 1, 0.4)
 
 -- Studio Brand Title (Sleek Reanim 1.8 Typography & Accent Underline)
 local titleContainer = Instance.new("Frame")
-titleContainer.Size = UDim2.new(0, 210, 1, 0)
+titleContainer.Size = UDim2.new(0, 240, 1, 0)
 titleContainer.BackgroundTransparency = 1
 titleContainer.Position = UDim2.new(0, 14, 0, 0)
 titleContainer.Parent = topBar
@@ -602,20 +564,641 @@ titleDiv.Position = UDim2.new(0, 0, 1, -6)
 titleDiv.Size = UDim2.new(0, 75, 0, 2)
 titleDiv.ZIndex = 33
 
--- Transport Controls Container (Centered, Hardware-Inspired)
+-- Top Center subtle viewport badge
+local vpBadge = Instance.new("TextLabel")
+vpBadge.Size = UDim2.new(0, 200, 1, 0)
+vpBadge.Position = UDim2.new(0.5, -100, 0, 0)
+vpBadge.BackgroundTransparency = 1
+vpBadge.Text = "VIEWPORT ACTIVE"
+vpBadge.TextColor3 = C.border
+vpBadge.Font = Enum.Font.Code
+vpBadge.TextSize = 9
+vpBadge.Parent = topBar
+
+-- Reanim 1.8 Window Controls (Yellow Minimize Dot + Red Close Dot)
+local windowControls = Instance.new("Frame")
+windowControls.Size = UDim2.new(0, 56, 1, 0)
+windowControls.Position = UDim2.new(1, -64, 0, 0)
+windowControls.BackgroundTransparency = 1
+windowControls.Parent = topBar
+
+local minimizeBtn = Instance.new("TextButton")
+minimizeBtn.Name = "MinimizeBtn"
+minimizeBtn.BackgroundColor3 = C.yellow
+minimizeBtn.BorderSizePixel = 0
+minimizeBtn.AnchorPoint = Vector2.new(1, 0.5)
+minimizeBtn.Position = UDim2.new(1, -24, 0.5, 0)
+minimizeBtn.Size = UDim2.new(0, 14, 0, 14)
+minimizeBtn.Text = ""
+minimizeBtn.AutoButtonColor = false
+minimizeBtn.Parent = windowControls
+applyCorner(minimizeBtn, 7)
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Name = "CloseBtn"
+closeBtn.BackgroundColor3 = C.red
+closeBtn.BorderSizePixel = 0
+closeBtn.AnchorPoint = Vector2.new(1, 0.5)
+closeBtn.Position = UDim2.new(1, -4, 0.5, 0)
+closeBtn.Size = UDim2.new(0, 14, 0, 14)
+closeBtn.Text = ""
+closeBtn.AutoButtonColor = false
+closeBtn.Parent = windowControls
+applyCorner(closeBtn, 7)
+
+closeBtn.MouseButton1Click:Connect(function()
+    Timeline.isPlaying = false
+    Timeline.isHoldingPose = false
+    if Timeline.playbackConn then
+        Timeline.playbackConn:Disconnect()
+        Timeline.playbackConn = nil
+    end
+    if steppedConn then
+        steppedConn:Disconnect()
+        steppedConn = nil
+    end
+    pcall(function()
+        local targetChar = (api and api.get_clone and api.get_clone()) or player.Character
+        if targetChar then
+            local animScript = targetChar:FindFirstChild("Animate")
+            if animScript then
+                animScript.Disabled = false
+            end
+        end
+    end)
+    screenGui:Destroy()
+end)
+
+-- ==================================================================
+-- 7. DOCKED PANELS: LEFT (LIBRARY), RIGHT (INSPECTOR), BOTTOM (TIMELINE)
+-- ==================================================================
+
+-- [LEFT DOCK] ANIMATION MEDIA LIBRARY (Sliding Interactive Sidebar)
+local libraryPanel = Instance.new("Frame")
+libraryPanel.Name = "LibraryPanel"
+libraryPanel.Size = UDim2.new(0, 240, 1, -196)
+libraryPanel.Position = UDim2.new(0, 10, 0, 48)
+libraryPanel.BackgroundColor3 = C.panelBg
+libraryPanel.BorderSizePixel = 0
+libraryPanel.ClipsDescendants = true
+libraryPanel.Active = true
+libraryPanel.Parent = mainFrame
+applyCorner(libraryPanel, 8)
+applyStroke(libraryPanel, C.glassBorder, 1, 0.4)
+
+local libHeader = Instance.new("TextLabel")
+libHeader.Size = UDim2.new(1, -40, 0, 32)
+libHeader.Position = UDim2.new(0, 12, 0, 2)
+libHeader.BackgroundTransparency = 1
+libHeader.Text = "MEDIA LIBRARY"
+libHeader.TextColor3 = C.accentSoft
+libHeader.Font = Enum.Font.GothamBold
+libHeader.TextSize = 10
+libHeader.TextXAlignment = Enum.TextXAlignment.Left
+libHeader.Parent = libraryPanel
+
+local btnSlideCollapseLib = Instance.new("TextButton")
+btnSlideCollapseLib.Name = "CollapseLibraryBtn"
+btnSlideCollapseLib.Size = UDim2.new(0, 22, 0, 20)
+btnSlideCollapseLib.Position = UDim2.new(1, -28, 0, 8)
+btnSlideCollapseLib.BackgroundColor3 = C.bg3
+btnSlideCollapseLib.Text = "<"
+btnSlideCollapseLib.TextColor3 = C.accentSoft
+btnSlideCollapseLib.Font = Enum.Font.GothamBold
+btnSlideCollapseLib.TextSize = 10
+btnSlideCollapseLib.Parent = libraryPanel
+applyCorner(btnSlideCollapseLib, 4)
+applyStroke(btnSlideCollapseLib, C.border, 1, 0.5)
+
+-- Expand button when Media Library is collapsed (Slide right tab)
+local btnSlideExpandLib = Instance.new("TextButton")
+btnSlideExpandLib.Name = "ExpandLibraryBtn"
+btnSlideExpandLib.Size = UDim2.new(0, 20, 0, 54)
+btnSlideExpandLib.Position = UDim2.new(0, 2, 0.5, -27)
+btnSlideExpandLib.BackgroundColor3 = C.bg2
+btnSlideExpandLib.Text = ">"
+btnSlideExpandLib.TextColor3 = C.accent
+btnSlideExpandLib.Font = Enum.Font.GothamBold
+btnSlideExpandLib.TextSize = 12
+btnSlideExpandLib.Visible = false
+btnSlideExpandLib.ZIndex = 40
+btnSlideExpandLib.Active = true
+btnSlideExpandLib.Parent = mainFrame
+applyCorner(btnSlideExpandLib, 4)
+applyStroke(btnSlideExpandLib, C.glassBorder, 1, 0.4)
+
+-- Search Box in Library
+local libSearch = Instance.new("TextBox")
+libSearch.Size = UDim2.new(1, -24, 0, 28)
+libSearch.Position = UDim2.new(0, 12, 0, 36)
+libSearch.BackgroundColor3 = C.input
+libSearch.PlaceholderText = "Search animations..."
+libSearch.PlaceholderColor3 = C.textMuted
+libSearch.Text = ""
+libSearch.TextColor3 = C.text
+libSearch.Font = Enum.Font.GothamMedium
+libSearch.TextSize = 11
+libSearch.TextXAlignment = Enum.TextXAlignment.Left
+libSearch.ClearTextOnFocus = false
+libSearch.Parent = libraryPanel
+applyCorner(libSearch, 6)
+applyStroke(libSearch, C.divider, 1, 0)
+local libSearchPad = Instance.new("UIPadding")
+libSearchPad.PaddingLeft = UDim.new(0, 8)
+libSearchPad.Parent = libSearch
+
+-- Library Scroll List
+local libScroll = Instance.new("ScrollingFrame")
+libScroll.Size = UDim2.new(1, -20, 1, -114)
+libScroll.Position = UDim2.new(0, 10, 0, 72)
+libScroll.BackgroundTransparency = 1
+libScroll.BorderSizePixel = 0
+libScroll.ScrollBarThickness = 3
+libScroll.ScrollBarImageColor3 = C.border
+libScroll.ScrollBarImageTransparency = 0.5
+libScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+libScroll.Parent = libraryPanel
+
+local libLayout = Instance.new("UIListLayout")
+libLayout.Padding = UDim.new(0, 4)
+libLayout.SortOrder = Enum.SortOrder.LayoutOrder
+libLayout.Parent = libScroll
+
+-- Bottom + Import Script button
+local btnImportCustom = Instance.new("TextButton")
+btnImportCustom.Size = UDim2.new(1, -24, 0, 28)
+btnImportCustom.Position = UDim2.new(0, 12, 1, -34)
+btnImportCustom.BackgroundColor3 = C.bg2
+btnImportCustom.Text = "+ Import Custom Script"
+btnImportCustom.TextColor3 = C.accent
+btnImportCustom.Font = Enum.Font.GothamBold
+btnImportCustom.TextSize = 10
+btnImportCustom.Parent = libraryPanel
+applyCorner(btnImportCustom, 6)
+applyStroke(btnImportCustom, C.divider, 1, 0.3)
+
+-- Left library slide collapse/expand logic
+local isLibCollapsed = false
+btnSlideCollapseLib.MouseButton1Click:Connect(function()
+    if isLibCollapsed then return end
+    isLibCollapsed = true
+    local ti = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(libraryPanel, ti, {Position = UDim2.new(0, -250, 0, 48)}):Play()
+    task.delay(0.18, function()
+        if isLibCollapsed then
+            btnSlideExpandLib.Visible = true
+        end
+    end)
+end)
+
+btnSlideExpandLib.MouseButton1Click:Connect(function()
+    if not isLibCollapsed then return end
+    isLibCollapsed = false
+    btnSlideExpandLib.Visible = false
+    local ti = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(libraryPanel, ti, {Position = UDim2.new(0, 10, 0, 48)}):Play()
+end)
+
+-- ------------------------------------------------------------------
+-- [RIGHT DOCK] CLIP INSPECTOR (Dedicated Vertical Side Panel)
+-- ------------------------------------------------------------------
+local inspectorFrame = Instance.new("Frame")
+inspectorFrame.Name = "InspectorPanel"
+inspectorFrame.Size = UDim2.new(0, 270, 1, -196)
+inspectorFrame.Position = UDim2.new(1, -280, 0, 48)
+inspectorFrame.BackgroundColor3 = C.panelBg
+inspectorFrame.BorderSizePixel = 0
+inspectorFrame.ClipsDescendants = true
+inspectorFrame.Active = true
+inspectorFrame.Parent = mainFrame
+applyCorner(inspectorFrame, 8)
+applyStroke(inspectorFrame, C.glassBorder, 1, 0.4)
+
+local inspHeader = Instance.new("TextLabel")
+inspHeader.Size = UDim2.new(1, -40, 0, 32)
+inspHeader.Position = UDim2.new(0, 12, 0, 2)
+inspHeader.BackgroundTransparency = 1
+inspHeader.Text = "CLIP INSPECTOR"
+inspHeader.TextColor3 = C.accentSoft
+inspHeader.Font = Enum.Font.GothamBold
+inspHeader.TextSize = 10
+inspHeader.TextXAlignment = Enum.TextXAlignment.Left
+inspHeader.Parent = inspectorFrame
+
+local btnSlideCollapseInsp = Instance.new("TextButton")
+btnSlideCollapseInsp.Name = "CollapseInspectorBtn"
+btnSlideCollapseInsp.Size = UDim2.new(0, 22, 0, 20)
+btnSlideCollapseInsp.Position = UDim2.new(1, -28, 0, 8)
+btnSlideCollapseInsp.BackgroundColor3 = C.bg3
+btnSlideCollapseInsp.Text = ">"
+btnSlideCollapseInsp.TextColor3 = C.accentSoft
+btnSlideCollapseInsp.Font = Enum.Font.GothamBold
+btnSlideCollapseInsp.TextSize = 10
+btnSlideCollapseInsp.Parent = inspectorFrame
+applyCorner(btnSlideCollapseInsp, 4)
+applyStroke(btnSlideCollapseInsp, C.border, 1, 0.5)
+
+-- Expand button when Inspector is collapsed
+local btnSlideExpandInsp = Instance.new("TextButton")
+btnSlideExpandInsp.Name = "ExpandInspectorBtn"
+btnSlideExpandInsp.Size = UDim2.new(0, 20, 0, 54)
+btnSlideExpandInsp.Position = UDim2.new(1, -22, 0.5, -27)
+btnSlideExpandInsp.BackgroundColor3 = C.bg2
+btnSlideExpandInsp.Text = "<"
+btnSlideExpandInsp.TextColor3 = C.accent
+btnSlideExpandInsp.Font = Enum.Font.GothamBold
+btnSlideExpandInsp.TextSize = 12
+btnSlideExpandInsp.Visible = false
+btnSlideExpandInsp.ZIndex = 40
+btnSlideExpandInsp.Active = true
+btnSlideExpandInsp.Parent = mainFrame
+applyCorner(btnSlideExpandInsp, 4)
+applyStroke(btnSlideExpandInsp, C.glassBorder, 1, 0.4)
+
+local isInspCollapsed = false
+btnSlideCollapseInsp.MouseButton1Click:Connect(function()
+    if isInspCollapsed then return end
+    isInspCollapsed = true
+    local ti = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(inspectorFrame, ti, {Position = UDim2.new(1, 10, 0, 48)}):Play()
+    task.delay(0.18, function()
+        if isInspCollapsed then
+            btnSlideExpandInsp.Visible = true
+        end
+    end)
+end)
+
+btnSlideExpandInsp.MouseButton1Click:Connect(function()
+    if not isInspCollapsed then return end
+    isInspCollapsed = false
+    btnSlideExpandInsp.Visible = false
+    local ti = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+    TweenService:Create(inspectorFrame, ti, {Position = UDim2.new(1, -280, 0, 48)}):Play()
+end)
+
+-- Inspector Divider Line
+local inspHeaderDiv = Instance.new("Frame")
+inspHeaderDiv.Size = UDim2.new(1, -20, 0, 1)
+inspHeaderDiv.Position = UDim2.new(0, 10, 0, 34)
+inspHeaderDiv.BackgroundColor3 = C.divider
+inspHeaderDiv.BorderSizePixel = 0
+inspHeaderDiv.Parent = inspectorFrame
+
+-- Empty state label when no clip is selected
+local inspEmptyLabel = Instance.new("TextLabel")
+inspEmptyLabel.Size = UDim2.new(1, -30, 0, 120)
+inspEmptyLabel.Position = UDim2.new(0, 15, 0, 48)
+inspEmptyLabel.BackgroundTransparency = 1
+inspEmptyLabel.Text = "No clip selected.\n\nClick any clip on the bottom timeline to inspect, crop frames, adjust speed, and configure transitions."
+inspEmptyLabel.TextColor3 = C.textMuted
+inspEmptyLabel.Font = Enum.Font.GothamMedium
+inspEmptyLabel.TextSize = 11
+inspEmptyLabel.TextWrapped = true
+inspEmptyLabel.Visible = true
+inspEmptyLabel.Parent = inspectorFrame
+
+-- Active Inspector Container (Scrolling container for vertical inspector)
+local inspContent = Instance.new("ScrollingFrame")
+inspContent.Size = UDim2.new(1, -16, 1, -40)
+inspContent.Position = UDim2.new(0, 8, 0, 36)
+inspContent.BackgroundTransparency = 1
+inspContent.BorderSizePixel = 0
+inspContent.ScrollBarThickness = 3
+inspContent.ScrollBarImageColor3 = C.border
+inspContent.ScrollBarImageTransparency = 0.5
+inspContent.CanvasSize = UDim2.new(0, 0, 0, 440)
+inspContent.Visible = false
+inspContent.Parent = inspectorFrame
+
+-- 1. Clip Header & Duration Readout
+local inspClipName = Instance.new("TextLabel")
+inspClipName.Size = UDim2.new(1, -10, 0, 18)
+inspClipName.Position = UDim2.new(0, 5, 0, 4)
+inspClipName.BackgroundTransparency = 1
+inspClipName.Text = "Clip Name"
+inspClipName.TextColor3 = C.white
+inspClipName.Font = Enum.Font.GothamBold
+inspClipName.TextSize = 11
+inspClipName.TextXAlignment = Enum.TextXAlignment.Left
+inspClipName.TextTruncate = Enum.TextTruncate.AtEnd
+inspClipName.Parent = inspContent
+
+local inspDurationSummary = Instance.new("TextLabel")
+inspDurationSummary.Size = UDim2.new(1, -10, 0, 16)
+inspDurationSummary.Position = UDim2.new(0, 5, 0, 24)
+inspDurationSummary.BackgroundTransparency = 1
+inspDurationSummary.Text = "0.00s (Orig: 0.00s)"
+inspDurationSummary.TextColor3 = C.accentSoft
+inspDurationSummary.Font = Enum.Font.Code
+inspDurationSummary.TextSize = 10
+inspDurationSummary.TextXAlignment = Enum.TextXAlignment.Left
+inspDurationSummary.Parent = inspContent
+
+-- 2. Action Buttons Group (Earlier, Later, Duplicate, Delete)
+local clipActionsRow = Instance.new("Frame")
+clipActionsRow.Size = UDim2.new(1, -10, 0, 24)
+clipActionsRow.Position = UDim2.new(0, 5, 0, 46)
+clipActionsRow.BackgroundTransparency = 1
+clipActionsRow.Parent = inspContent
+
+local btnMoveLeft = Instance.new("TextButton")
+btnMoveLeft.Size = UDim2.new(0, 52, 1, 0)
+btnMoveLeft.Position = UDim2.new(0, 0, 0, 0)
+btnMoveLeft.BackgroundColor3 = C.bg2
+btnMoveLeft.Text = "Earlier"
+btnMoveLeft.TextColor3 = C.text2
+btnMoveLeft.Font = Enum.Font.GothamMedium
+btnMoveLeft.TextSize = 9
+btnMoveLeft.Parent = clipActionsRow
+applyCorner(btnMoveLeft, 4)
+applyStroke(btnMoveLeft, C.border, 1, 0.5)
+
+local btnMoveRight = Instance.new("TextButton")
+btnMoveRight.Size = UDim2.new(0, 46, 1, 0)
+btnMoveRight.Position = UDim2.new(0, 56, 0, 0)
+btnMoveRight.BackgroundColor3 = C.bg2
+btnMoveRight.Text = "Later"
+btnMoveRight.TextColor3 = C.text2
+btnMoveRight.Font = Enum.Font.GothamMedium
+btnMoveRight.TextSize = 9
+btnMoveRight.Parent = clipActionsRow
+applyCorner(btnMoveRight, 4)
+applyStroke(btnMoveRight, C.border, 1, 0.5)
+
+local btnDuplicateClip = Instance.new("TextButton")
+btnDuplicateClip.Size = UDim2.new(0, 62, 1, 0)
+btnDuplicateClip.Position = UDim2.new(0, 106, 0, 0)
+btnDuplicateClip.BackgroundColor3 = C.bg2
+btnDuplicateClip.Text = "Duplicate"
+btnDuplicateClip.TextColor3 = C.accentSoft
+btnDuplicateClip.Font = Enum.Font.GothamMedium
+btnDuplicateClip.TextSize = 9
+btnDuplicateClip.Parent = clipActionsRow
+applyCorner(btnDuplicateClip, 4)
+applyStroke(btnDuplicateClip, C.border, 1, 0.5)
+
+local btnDeleteClip = Instance.new("TextButton")
+btnDeleteClip.Size = UDim2.new(0, 50, 1, 0)
+btnDeleteClip.Position = UDim2.new(0, 172, 0, 0)
+btnDeleteClip.BackgroundColor3 = Color3.fromRGB(35, 12, 18)
+btnDeleteClip.Text = "Delete"
+btnDeleteClip.TextColor3 = C.danger
+btnDeleteClip.Font = Enum.Font.GothamBold
+btnDeleteClip.TextSize = 9
+btnDeleteClip.Parent = clipActionsRow
+applyCorner(btnDeleteClip, 4)
+applyStroke(btnDeleteClip, Color3.fromRGB(110, 30, 45), 1, 0.4)
+
+-- 3. Divider 1
+local inspDiv1 = Instance.new("Frame")
+inspDiv1.Size = UDim2.new(1, -10, 0, 1)
+inspDiv1.Position = UDim2.new(0, 5, 0, 78)
+inspDiv1.BackgroundColor3 = C.divider
+inspDiv1.BorderSizePixel = 0
+inspDiv1.Parent = inspContent
+
+-- 4. Unified Dual-Handle Horizontal Crop / Trim Bar
+local trimSectionLabel = Instance.new("TextLabel")
+trimSectionLabel.Size = UDim2.new(1, -10, 0, 16)
+trimSectionLabel.Position = UDim2.new(0, 5, 0, 86)
+trimSectionLabel.BackgroundTransparency = 1
+trimSectionLabel.Text = "FRAME TRIM & CROP"
+trimSectionLabel.TextColor3 = C.accent
+trimSectionLabel.Font = Enum.Font.GothamBold
+trimSectionLabel.TextSize = 9
+trimSectionLabel.TextXAlignment = Enum.TextXAlignment.Left
+trimSectionLabel.Parent = inspContent
+
+local trimRow = Instance.new("Frame")
+trimRow.Size = UDim2.new(1, -10, 0, 22)
+trimRow.Position = UDim2.new(0, 5, 0, 104)
+trimRow.BackgroundTransparency = 1
+trimRow.Parent = inspContent
+
+local trimStartLabel = Instance.new("TextLabel")
+trimStartLabel.Size = UDim2.new(0, 48, 1, 0)
+trimStartLabel.Position = UDim2.new(0, 0, 0, 0)
+trimStartLabel.BackgroundTransparency = 1
+trimStartLabel.Text = "Trim In:"
+trimStartLabel.TextColor3 = C.textMuted
+trimStartLabel.Font = Enum.Font.GothamMedium
+trimStartLabel.TextSize = 9
+trimStartLabel.TextXAlignment = Enum.TextXAlignment.Left
+trimStartLabel.Parent = trimRow
+
+local trimStartBox = Instance.new("TextBox")
+trimStartBox.Size = UDim2.new(0, 50, 0, 20)
+trimStartBox.Position = UDim2.new(0, 48, 0.5, -10)
+trimStartBox.BackgroundColor3 = C.input
+trimStartBox.Text = "0.00"
+trimStartBox.TextColor3 = C.text
+trimStartBox.Font = Enum.Font.Code
+trimStartBox.TextSize = 10
+trimStartBox.Parent = trimRow
+applyCorner(trimStartBox, 4)
+applyStroke(trimStartBox, C.divider, 1, 0)
+
+local trimEndLabel = Instance.new("TextLabel")
+trimEndLabel.Size = UDim2.new(0, 54, 1, 0)
+trimEndLabel.Position = UDim2.new(1, -108, 0, 0)
+trimEndLabel.BackgroundTransparency = 1
+trimEndLabel.Text = "Trim Out:"
+trimEndLabel.TextColor3 = C.textMuted
+trimEndLabel.Font = Enum.Font.GothamMedium
+trimEndLabel.TextSize = 9
+trimEndLabel.TextXAlignment = Enum.TextXAlignment.Right
+trimEndLabel.Parent = trimRow
+
+local trimEndBox = Instance.new("TextBox")
+trimEndBox.Size = UDim2.new(0, 50, 0, 20)
+trimEndBox.Position = UDim2.new(1, -50, 0.5, -10)
+trimEndBox.BackgroundColor3 = C.input
+trimEndBox.Text = "0.00"
+trimEndBox.TextColor3 = C.text
+trimEndBox.Font = Enum.Font.Code
+trimEndBox.TextSize = 10
+trimEndBox.Parent = trimRow
+applyCorner(trimEndBox, 4)
+applyStroke(trimEndBox, C.divider, 1, 0)
+
+local trimSliderTrack = Instance.new("Frame")
+trimSliderTrack.Size = UDim2.new(1, -10, 0, 10)
+trimSliderTrack.Position = UDim2.new(0, 5, 0, 134)
+trimSliderTrack.BackgroundColor3 = C.bg3
+trimSliderTrack.Parent = inspContent
+applyCorner(trimSliderTrack, 5)
+
+local trimActiveFill = Instance.new("Frame")
+trimActiveFill.Size = UDim2.new(1, 0, 1, 0)
+trimActiveFill.BackgroundColor3 = C.accent
+trimActiveFill.BorderSizePixel = 0
+trimActiveFill.Parent = trimSliderTrack
+applyCorner(trimActiveFill, 5)
+
+local trimStartHandle = Instance.new("TextButton")
+trimStartHandle.Size = UDim2.new(0, 12, 0, 16)
+trimStartHandle.Position = UDim2.new(0, -6, 0.5, -8)
+trimStartHandle.BackgroundColor3 = C.white
+trimStartHandle.Text = ""
+trimStartHandle.ZIndex = 20
+trimStartHandle.Parent = trimSliderTrack
+applyCorner(trimStartHandle, 3)
+
+local trimEndHandle = Instance.new("TextButton")
+trimEndHandle.Size = UDim2.new(0, 12, 0, 16)
+trimEndHandle.Position = UDim2.new(1, -6, 0.5, -8)
+trimEndHandle.BackgroundColor3 = C.green
+trimEndHandle.Text = ""
+trimEndHandle.ZIndex = 20
+trimEndHandle.Parent = trimSliderTrack
+applyCorner(trimEndHandle, 3)
+
+-- Aliases for backwards compatibility
+local trimStartSlider = trimSliderTrack
+local trimEndSlider = trimSliderTrack
+local trimStartFill = trimActiveFill
+local trimEndFill = trimActiveFill
+
+-- 5. Divider 2
+local inspDiv2 = Instance.new("Frame")
+inspDiv2.Size = UDim2.new(1, -10, 0, 1)
+inspDiv2.Position = UDim2.new(0, 5, 0, 156)
+inspDiv2.BackgroundColor3 = C.divider
+inspDiv2.BorderSizePixel = 0
+inspDiv2.Parent = inspContent
+
+-- 6. Playback Speed Section
+local speedSectionLabel = Instance.new("TextLabel")
+speedSectionLabel.Size = UDim2.new(1, -10, 0, 16)
+speedSectionLabel.Position = UDim2.new(0, 5, 0, 164)
+speedSectionLabel.BackgroundTransparency = 1
+speedSectionLabel.Text = "PLAYBACK SPEED"
+speedSectionLabel.TextColor3 = C.accent
+speedSectionLabel.Font = Enum.Font.GothamBold
+speedSectionLabel.TextSize = 9
+speedSectionLabel.TextXAlignment = Enum.TextXAlignment.Left
+speedSectionLabel.Parent = inspContent
+
+local speedBtnsContainer = Instance.new("Frame")
+speedBtnsContainer.Size = UDim2.new(1, -10, 0, 52)
+speedBtnsContainer.Position = UDim2.new(0, 5, 0, 184)
+speedBtnsContainer.BackgroundTransparency = 1
+speedBtnsContainer.Parent = inspContent
+
+local speedButtons = {}
+local speedOptions = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 }
+
+-- 7. Divider 3
+local inspDiv3 = Instance.new("Frame")
+inspDiv3.Size = UDim2.new(1, -10, 0, 1)
+inspDiv3.Position = UDim2.new(0, 5, 0, 244)
+inspDiv3.BackgroundColor3 = C.divider
+inspDiv3.BorderSizePixel = 0
+inspDiv3.Parent = inspContent
+
+-- 8. Transition In Section (PrestigeX)
+local transSectionLabel = Instance.new("TextLabel")
+transSectionLabel.Size = UDim2.new(1, -10, 0, 16)
+transSectionLabel.Position = UDim2.new(0, 5, 0, 252)
+transSectionLabel.BackgroundTransparency = 1
+transSectionLabel.Text = "TRANSITION IN"
+transSectionLabel.TextColor3 = C.accent
+transSectionLabel.Font = Enum.Font.GothamBold
+transSectionLabel.TextSize = 9
+transSectionLabel.TextXAlignment = Enum.TextXAlignment.Left
+transSectionLabel.Parent = inspContent
+
+local transInfoLabel = Instance.new("TextLabel")
+transInfoLabel.Size = UDim2.new(1, -10, 0, 32)
+transInfoLabel.Position = UDim2.new(0, 5, 0, 272)
+transInfoLabel.BackgroundTransparency = 1
+transInfoLabel.Text = "(First clip starts directly without transition)"
+transInfoLabel.TextColor3 = C.textMuted
+transInfoLabel.Font = Enum.Font.GothamMedium
+transInfoLabel.TextSize = 9
+transInfoLabel.TextWrapped = true
+transInfoLabel.Parent = inspContent
+
+local transDurRow = Instance.new("Frame")
+transDurRow.Size = UDim2.new(1, -10, 0, 22)
+transDurRow.Position = UDim2.new(0, 5, 0, 272)
+transDurRow.BackgroundTransparency = 1
+transDurRow.Visible = false
+transDurRow.Parent = inspContent
+
+local transLabel = Instance.new("TextLabel")
+transLabel.Size = UDim2.new(0, 60, 1, 0)
+transLabel.Position = UDim2.new(0, 0, 0, 0)
+transLabel.BackgroundTransparency = 1
+transLabel.Text = "Duration:"
+transLabel.TextColor3 = C.textMuted
+transLabel.Font = Enum.Font.GothamMedium
+transLabel.TextSize = 9
+transLabel.TextXAlignment = Enum.TextXAlignment.Left
+transLabel.Parent = transDurRow
+
+local transDurationBox = Instance.new("TextBox")
+transDurationBox.Size = UDim2.new(0, 50, 0, 20)
+transDurationBox.Position = UDim2.new(0, 60, 0.5, -10)
+transDurationBox.BackgroundColor3 = C.bg3
+transDurationBox.Text = "0.22s"
+transDurationBox.TextColor3 = C.text
+transDurationBox.Font = Enum.Font.Code
+transDurationBox.TextSize = 9
+transDurationBox.Parent = transDurRow
+applyCorner(transDurationBox, 4)
+applyStroke(transDurationBox, C.glassBorder, 1, 0.5)
+
+local transBtnsContainer = Instance.new("Frame")
+transBtnsContainer.Size = UDim2.new(1, -10, 0, 54)
+transBtnsContainer.Position = UDim2.new(0, 5, 0, 298)
+transBtnsContainer.BackgroundTransparency = 1
+transBtnsContainer.Visible = false
+transBtnsContainer.Parent = inspContent
+
+local transitionPresetList = {
+    { key = "None", label = "Cut" },
+    { key = "Quick", label = "Quick (0.12s)" },
+    { key = "Smooth", label = "Smooth (0.22s)" },
+    { key = "Flow", label = "Flow (0.34s)" },
+    { key = "Soft", label = "Soft (0.48s)" },
+}
+
+-- ------------------------------------------------------------------
+-- [BOTTOM DOCK] TIMELINE SEQUENCER & TRANSPORT BAR
+-- ------------------------------------------------------------------
+local timelineSection = Instance.new("Frame")
+timelineSection.Name = "TimelineBottomPanel"
+timelineSection.Size = UDim2.new(1, -20, 0, 134)
+timelineSection.Position = UDim2.new(0, 10, 1, -140)
+timelineSection.BackgroundColor3 = C.bg0
+timelineSection.BorderSizePixel = 0
+timelineSection.ClipsDescendants = true
+timelineSection.Active = true
+timelineSection.Parent = mainFrame
+applyCorner(timelineSection, 8)
+applyStroke(timelineSection, C.glassBorder, 1, 0.4)
+
+-- TOP STRIP OF BOTTOM DOCK: Transport Buttons + Reanim / Export
+local bottomTopStrip = Instance.new("Frame")
+bottomTopStrip.Size = UDim2.new(1, 0, 0, 34)
+bottomTopStrip.Position = UDim2.new(0, 0, 0, 0)
+bottomTopStrip.BackgroundColor3 = C.bg1
+bottomTopStrip.BorderSizePixel = 0
+bottomTopStrip.Parent = timelineSection
+applyStroke(bottomTopStrip, C.divider, 1, 0)
+
+-- Left Side: Hardware Transport Controls
 local transportFrame = Instance.new("Frame")
-transportFrame.Size = UDim2.new(0, 315, 0, 30)
-transportFrame.Position = UDim2.new(0.5, -158, 0.5, -15)
-transportFrame.BackgroundColor3 = C.bg2
-transportFrame.Parent = topBar
-applyCorner(transportFrame, 6)
-applyStroke(transportFrame, C.border, 1, 0.6)
+transportFrame.Size = UDim2.new(0, 310, 0, 26)
+transportFrame.Position = UDim2.new(0, 8, 0.5, -13)
+transportFrame.BackgroundTransparency = 1
+transportFrame.Parent = bottomTopStrip
 
 local transportLayout = Instance.new("UIListLayout")
 transportLayout.FillDirection = Enum.FillDirection.Horizontal
-transportLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 transportLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-transportLayout.Padding = UDim.new(0, 5)
+transportLayout.Padding = UDim.new(0, 4)
 transportLayout.Parent = transportFrame
 
 local function createTransportBtn(text, sizeW, tooltip)
@@ -644,7 +1227,7 @@ btnLoop.TextColor3 = C.green
 
 -- Timecode Readout
 local timecodeLabel = Instance.new("TextLabel")
-timecodeLabel.Size = UDim2.new(0, 75, 0, 22)
+timecodeLabel.Size = UDim2.new(0, 72, 0, 22)
 timecodeLabel.BackgroundColor3 = C.bg0
 timecodeLabel.Text = "00:00.00"
 timecodeLabel.TextColor3 = C.accentSoft
@@ -652,18 +1235,18 @@ timecodeLabel.Font = Enum.Font.Code
 timecodeLabel.TextSize = 10
 timecodeLabel.Parent = transportFrame
 applyCorner(timecodeLabel, 4)
-applyStroke(timecodeLabel, C.border, 1, 0.6)
+applyStroke(timecodeLabel, C.divider, 1, 0)
 
--- Top Right Action Buttons: Enable Reanim + Merge & Export + Reanim 1.8 Window Controls
+-- Right Side: Reanim Toggle + Export Buttons
 local topRightFrame = Instance.new("Frame")
-topRightFrame.Size = UDim2.new(0, 295, 1, 0)
-topRightFrame.Position = UDim2.new(1, -300, 0, 0)
+topRightFrame.Size = UDim2.new(0, 236, 0, 26)
+topRightFrame.Position = UDim2.new(1, -244, 0.5, -13)
 topRightFrame.BackgroundTransparency = 1
-topRightFrame.Parent = topBar
+topRightFrame.Parent = bottomTopStrip
 
 local btnToggleReanim = Instance.new("TextButton")
-btnToggleReanim.Size = UDim2.new(0, 105, 0, 26)
-btnToggleReanim.Position = UDim2.new(0, 0, 0.5, -13)
+btnToggleReanim.Size = UDim2.new(0, 108, 0, 24)
+btnToggleReanim.Position = UDim2.new(0, 0, 0.5, -12)
 btnToggleReanim.BackgroundColor3 = C.bg2
 btnToggleReanim.Text = "ENABLE REANIM"
 btnToggleReanim.TextColor3 = C.text2
@@ -719,8 +1302,8 @@ end)
 updateReanimButton()
 
 local btnExport = Instance.new("TextButton")
-btnExport.Size = UDim2.new(0, 115, 0, 26)
-btnExport.Position = UDim2.new(0, 112, 0.5, -13)
+btnExport.Size = UDim2.new(0, 118, 0, 24)
+btnExport.Position = UDim2.new(0, 114, 0.5, -12)
 btnExport.BackgroundColor3 = C.bg2
 btnExport.Text = "MERGE & EXPORT"
 btnExport.TextColor3 = C.accent
@@ -730,614 +1313,13 @@ btnExport.Parent = topRightFrame
 applyCorner(btnExport, 5)
 applyStroke(btnExport, C.glassBorder, 1, 0.5)
 
--- Reanim 1.8 Window Controls (Yellow Minimize Dot + Red Close Dot)
-local minimizeBtn = Instance.new("TextButton")
-minimizeBtn.Name = "MinimizeBtn"
-minimizeBtn.BackgroundColor3 = C.yellow
-minimizeBtn.BorderSizePixel = 0
-minimizeBtn.AnchorPoint = Vector2.new(1, 0.5)
-minimizeBtn.Position = UDim2.new(1, -24, 0.5, 0)
-minimizeBtn.Size = UDim2.new(0, 14, 0, 14)
-minimizeBtn.Text = ""
-minimizeBtn.AutoButtonColor = false
-minimizeBtn.Parent = topRightFrame
-applyCorner(minimizeBtn, 7)
-
-local closeBtn = Instance.new("TextButton")
-closeBtn.Name = "CloseBtn"
-closeBtn.BackgroundColor3 = C.red
-closeBtn.BorderSizePixel = 0
-closeBtn.AnchorPoint = Vector2.new(1, 0.5)
-closeBtn.Position = UDim2.new(1, -4, 0.5, 0)
-closeBtn.Size = UDim2.new(0, 14, 0, 14)
-closeBtn.Text = ""
-closeBtn.AutoButtonColor = false
-closeBtn.Parent = topRightFrame
-applyCorner(closeBtn, 7)
-
-closeBtn.MouseButton1Click:Connect(function()
-    Timeline.isPlaying = false
-    Timeline.isHoldingPose = false
-    if Timeline.playbackConn then
-        Timeline.playbackConn:Disconnect()
-        Timeline.playbackConn = nil
-    end
-    if steppedConn then
-        steppedConn:Disconnect()
-        steppedConn = nil
-    end
-    pcall(function()
-        local targetChar = (api and api.get_clone and api.get_clone()) or player.Character
-        if targetChar then
-            local animScript = targetChar:FindFirstChild("Animate")
-            if animScript then
-                animScript.Disabled = false
-            end
-        end
-    end)
-    screenGui:Destroy()
-end)
-
--- ══════════════════════════════════════════════════════════════════
--- 7. TWO-COLUMN WORKSPACE: LEFT (LIBRARY) & RIGHT (SEQUENCER)
--- ══════════════════════════════════════════════════════════════════
-local workspaceArea = Instance.new("Frame")
-workspaceArea.Size = UDim2.new(1, 0, 1, -46)
-workspaceArea.Position = UDim2.new(0, 0, 0, 46)
-workspaceArea.BackgroundTransparency = 1
-workspaceArea.Parent = mainFrame
-
-local isStudioMinimized = false
-local STUDIO_FULL_SIZE = mainFrame.Size
-local STUDIO_MINI_SIZE = UDim2.new(0, defaultStudioW, 0, 46)
-
--- Handle window drag & corner resize
-local isResizing, resizeStartMouse, resizeStartFrameSize = false, nil, nil
-resizeGrip.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        isResizing = true
-        resizeStartMouse = input.Position
-        resizeStartFrameSize = mainFrame.AbsoluteSize
-        resizeGrip.TextColor3 = C.accent
-    end
-end)
-
-UserInputService.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        if isResizing then
-            isResizing = false
-            resizeGrip.TextColor3 = C.border
-        end
-    end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-    if isResizing and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - resizeStartMouse
-        local camSize = workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize or Vector2.new(1920, 1080)
-        local newW = math.clamp(resizeStartFrameSize.X + delta.X, 660, camSize.X - 20)
-        local newH = math.clamp(resizeStartFrameSize.Y + delta.Y, 380, camSize.Y - 20)
-        mainFrame.Size = UDim2.new(0, newW, 0, newH)
-        STUDIO_FULL_SIZE = mainFrame.Size
-        STUDIO_MINI_SIZE = UDim2.new(0, newW, 0, 46)
-    end
-end)
-
-minimizeBtn.MouseButton1Click:Connect(function()
-    isStudioMinimized = not isStudioMinimized
-    local ti = TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    if isStudioMinimized then
-        workspaceArea.Visible = false
-        TweenService:Create(mainFrame, ti, {Size = STUDIO_MINI_SIZE}):Play()
-    else
-        TweenService:Create(mainFrame, ti, {Size = STUDIO_FULL_SIZE}):Play()
-        task.delay(0.22, function()
-            if not isStudioMinimized then
-                workspaceArea.Visible = true
-            end
-        end)
-    end
-end)
-
--- Expand button when Media Library is collapsed (Slide right tab)
-local btnSlideExpandLib = Instance.new("TextButton")
-btnSlideExpandLib.Name = "ExpandLibraryBtn"
-btnSlideExpandLib.Size = UDim2.new(0, 20, 0, 54)
-btnSlideExpandLib.Position = UDim2.new(0, 2, 0.5, -27)
-btnSlideExpandLib.BackgroundColor3 = C.bg2
-btnSlideExpandLib.Text = ">"
-btnSlideExpandLib.TextColor3 = C.accent
-btnSlideExpandLib.Font = Enum.Font.GothamBold
-btnSlideExpandLib.TextSize = 12
-btnSlideExpandLib.Visible = false
-btnSlideExpandLib.ZIndex = 40
-btnSlideExpandLib.Parent = workspaceArea
-applyCorner(btnSlideExpandLib, 5)
-applyStroke(btnSlideExpandLib, C.glassBorder, 1, 0.4)
-
--- LEFT PANEL: ANIMATION MEDIA LIBRARY (Sliding Interactive Sidebar)
-local libraryPanel = Instance.new("Frame")
-libraryPanel.Size = UDim2.new(0, 260, 1, 0)
-libraryPanel.Position = UDim2.new(0, 0, 0, 0)
-libraryPanel.BackgroundColor3 = C.panelBg
-libraryPanel.BorderSizePixel = 0
-libraryPanel.Parent = workspaceArea
-applyStroke(libraryPanel, C.divider, 1, 0)
-
-local libHeader = Instance.new("TextLabel")
-libHeader.Size = UDim2.new(1, -44, 0, 28)
-libHeader.Position = UDim2.new(0, 12, 0, 8)
-libHeader.BackgroundTransparency = 1
-libHeader.Text = "MEDIA LIBRARY"
-libHeader.TextColor3 = C.accentSoft
-libHeader.Font = Enum.Font.GothamBold
-libHeader.TextSize = 10
-libHeader.TextXAlignment = Enum.TextXAlignment.Left
-libHeader.Parent = libraryPanel
-
--- Slide-Collapse button inside library header (<)
-local btnSlideCollapseLib = Instance.new("TextButton")
-btnSlideCollapseLib.Name = "CollapseLibraryBtn"
-btnSlideCollapseLib.Size = UDim2.new(0, 22, 0, 20)
-btnSlideCollapseLib.Position = UDim2.new(1, -26, 0, 12)
-btnSlideCollapseLib.BackgroundColor3 = C.bg3
-btnSlideCollapseLib.Text = "<"
-btnSlideCollapseLib.TextColor3 = C.accentSoft
-btnSlideCollapseLib.Font = Enum.Font.GothamBold
-btnSlideCollapseLib.TextSize = 10
-btnSlideCollapseLib.Parent = libraryPanel
-applyCorner(btnSlideCollapseLib, 4)
-applyStroke(btnSlideCollapseLib, C.border, 1, 0.5)
-
--- Search Box in Library
-local libSearch = Instance.new("TextBox")
-libSearch.Size = UDim2.new(1, -24, 0, 28)
-libSearch.Position = UDim2.new(0, 12, 0, 36)
-libSearch.BackgroundColor3 = C.input
-libSearch.PlaceholderText = "Search animations..."
-libSearch.PlaceholderColor3 = C.textMuted
-libSearch.Text = ""
-libSearch.TextColor3 = C.text
-libSearch.Font = Enum.Font.GothamMedium
-libSearch.TextSize = 11
-libSearch.TextXAlignment = Enum.TextXAlignment.Left
-libSearch.ClearTextOnFocus = false
-libSearch.Parent = libraryPanel
-applyCorner(libSearch, 6)
-applyStroke(libSearch, C.divider, 1, 0)
-local libSearchPad = Instance.new("UIPadding")
-libSearchPad.PaddingLeft = UDim.new(0, 8)
-libSearchPad.Parent = libSearch
-
--- Library Scroll List
-local libScroll = Instance.new("ScrollingFrame")
-libScroll.Size = UDim2.new(1, -20, 1, -114)
-libScroll.Position = UDim2.new(0, 10, 0, 72)
-libScroll.BackgroundTransparency = 1
-libScroll.BorderSizePixel = 0
-libScroll.ScrollBarThickness = 3
-libScroll.ScrollBarImageColor3 = C.border
-libScroll.ScrollBarImageTransparency = 0.5
-libScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-libScroll.Parent = libraryPanel
-
-local libLayout = Instance.new("UIListLayout")
-libLayout.Padding = UDim.new(0, 4)
-libLayout.SortOrder = Enum.SortOrder.LayoutOrder
-libLayout.Parent = libScroll
-
--- Bottom + Import Script button
-local btnImportCustom = Instance.new("TextButton")
-btnImportCustom.Size = UDim2.new(1, -24, 0, 28)
-btnImportCustom.Position = UDim2.new(0, 12, 1, -34)
-btnImportCustom.BackgroundColor3 = C.bg2
-btnImportCustom.Text = "+ Import Custom Script"
-btnImportCustom.TextColor3 = C.accent
-btnImportCustom.Font = Enum.Font.GothamBold
-btnImportCustom.TextSize = 10
-btnImportCustom.Parent = libraryPanel
-applyCorner(btnImportCustom, 6)
-applyStroke(btnImportCustom, C.divider, 1, 0.3)
-
--- RIGHT PANEL: SEQUENCER & COMPACT INSPECTOR
-local rightPanel = Instance.new("Frame")
-rightPanel.Size = UDim2.new(1, -260, 1, 0)
-rightPanel.Position = UDim2.new(0, 260, 0, 0)
-rightPanel.BackgroundTransparency = 1
-rightPanel.Parent = workspaceArea
-
--- Sliding Media Library interaction hooks
-local isLibCollapsed = false
-btnSlideCollapseLib.MouseButton1Click:Connect(function()
-    if isLibCollapsed then return end
-    isLibCollapsed = true
-    local ti = TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    TweenService:Create(libraryPanel, ti, {Position = UDim2.new(0, -260, 0, 0)}):Play()
-    TweenService:Create(rightPanel, ti, {Position = UDim2.new(0, 24, 0, 0), Size = UDim2.new(1, -24, 1, 0)}):Play()
-    task.delay(0.18, function()
-        if isLibCollapsed then
-            btnSlideExpandLib.Visible = true
-        end
-    end)
-end)
-
-btnSlideExpandLib.MouseButton1Click:Connect(function()
-    if not isLibCollapsed then return end
-    isLibCollapsed = false
-    btnSlideExpandLib.Visible = false
-    local ti = TweenInfo.new(0.24, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    TweenService:Create(libraryPanel, ti, {Position = UDim2.new(0, 0, 0, 0)}):Play()
-    TweenService:Create(rightPanel, ti, {Position = UDim2.new(0, 260, 0, 0), Size = UDim2.new(1, -260, 1, 0)}):Play()
-end)
-
--- UPPER ZONE: COMPACT 104px CLIP INSPECTOR RIBBON (Dual-Trim & Speed Controls)
-local inspectorFrame = Instance.new("Frame")
-inspectorFrame.Size = UDim2.new(1, 0, 0, 104)
-inspectorFrame.BackgroundColor3 = C.panelBg
-inspectorFrame.BorderSizePixel = 0
-inspectorFrame.ClipsDescendants = true
-inspectorFrame.Parent = rightPanel
-applyStroke(inspectorFrame, C.divider, 1, 0)
-
--- Empty state label when no clip is selected
-local inspEmptyLabel = Instance.new("TextLabel")
-inspEmptyLabel.Size = UDim2.new(1, -40, 0, 50)
-inspEmptyLabel.Position = UDim2.new(0, 20, 0.5, -25)
-inspEmptyLabel.BackgroundTransparency = 1
-inspEmptyLabel.Text = "Select a clip on the timeline below to crop frames, adjust speed, or configure transitions."
-inspEmptyLabel.TextColor3 = C.textMuted
-inspEmptyLabel.Font = Enum.Font.Gotham
-inspEmptyLabel.TextSize = 11
-inspEmptyLabel.Visible = true
-inspEmptyLabel.Parent = inspectorFrame
-
--- Active Inspector Container (Visible when clip selected)
-local inspContent = Instance.new("Frame")
-inspContent.Size = UDim2.new(1, -20, 1, 0)
-inspContent.Position = UDim2.new(0, 10, 0, 0)
-inspContent.BackgroundTransparency = 1
-inspContent.Visible = false
-inspContent.Parent = inspectorFrame
-
--- ROW 1: Header / Clip Name / Length / Action Buttons (Height: 28px)
-local inspTopRow = Instance.new("Frame")
-inspTopRow.Size = UDim2.new(1, 0, 0, 28)
-inspTopRow.Position = UDim2.new(0, 0, 0, 2)
-inspTopRow.BackgroundTransparency = 1
-inspTopRow.Parent = inspContent
-
-local inspHeaderBadge = Instance.new("TextLabel")
-inspHeaderBadge.Size = UDim2.new(0, 72, 0, 20)
-inspHeaderBadge.Position = UDim2.new(0, 0, 0.5, -10)
-inspHeaderBadge.BackgroundColor3 = C.bg3
-inspHeaderBadge.Text = "INSPECTOR"
-inspHeaderBadge.TextColor3 = C.accent
-inspHeaderBadge.Font = Enum.Font.GothamBold
-inspHeaderBadge.TextSize = 9
-inspHeaderBadge.Parent = inspTopRow
-applyCorner(inspHeaderBadge, 4)
-applyStroke(inspHeaderBadge, C.border, 1, 0.5)
-
-local inspClipName = Instance.new("TextLabel")
-inspClipName.Size = UDim2.new(0, 140, 0, 20)
-inspClipName.Position = UDim2.new(0, 78, 0.5, -10)
-inspClipName.BackgroundTransparency = 1
-inspClipName.Text = "Clip Name"
-inspClipName.TextColor3 = C.white
-inspClipName.Font = Enum.Font.GothamBold
-inspClipName.TextSize = 11
-inspClipName.TextXAlignment = Enum.TextXAlignment.Left
-inspClipName.TextTruncate = Enum.TextTruncate.AtEnd
-inspClipName.Parent = inspTopRow
-
-local inspDurationSummary = Instance.new("TextLabel")
-inspDurationSummary.Size = UDim2.new(0, 150, 0, 20)
-inspDurationSummary.Position = UDim2.new(0, 222, 0.5, -10)
-inspDurationSummary.BackgroundTransparency = 1
-inspDurationSummary.Text = "0.00s (Orig: 0.00s)"
-inspDurationSummary.TextColor3 = C.accentSoft
-inspDurationSummary.Font = Enum.Font.Code
-inspDurationSummary.TextSize = 10
-inspDurationSummary.TextXAlignment = Enum.TextXAlignment.Left
-inspDurationSummary.Parent = inspTopRow
-
--- Action Buttons Group (Right side of Row 1)
-local clipActionsRow = Instance.new("Frame")
-clipActionsRow.Size = UDim2.new(0, 260, 0, 22)
-clipActionsRow.Position = UDim2.new(1, -260, 0.5, -11)
-clipActionsRow.BackgroundTransparency = 1
-clipActionsRow.Parent = inspTopRow
-
-local clipActionsLayout = Instance.new("UIListLayout")
-clipActionsLayout.FillDirection = Enum.FillDirection.Horizontal
-clipActionsLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-clipActionsLayout.Padding = UDim.new(0, 4)
-clipActionsLayout.Parent = clipActionsRow
-
-local btnMoveLeft = Instance.new("TextButton")
-btnMoveLeft.Size = UDim2.new(0, 56, 1, 0)
-btnMoveLeft.BackgroundColor3 = C.bg2
-btnMoveLeft.Text = "Earlier"
-btnMoveLeft.TextColor3 = C.text2
-btnMoveLeft.Font = Enum.Font.GothamMedium
-btnMoveLeft.TextSize = 9
-btnMoveLeft.Parent = clipActionsRow
-applyCorner(btnMoveLeft, 4)
-applyStroke(btnMoveLeft, C.border, 1, 0.5)
-
-local btnMoveRight = Instance.new("TextButton")
-btnMoveRight.Size = UDim2.new(0, 50, 1, 0)
-btnMoveRight.BackgroundColor3 = C.bg2
-btnMoveRight.Text = "Later"
-btnMoveRight.TextColor3 = C.text2
-btnMoveRight.Font = Enum.Font.GothamMedium
-btnMoveRight.TextSize = 9
-btnMoveRight.Parent = clipActionsRow
-applyCorner(btnMoveRight, 4)
-applyStroke(btnMoveRight, C.border, 1, 0.5)
-
-local btnDuplicateClip = Instance.new("TextButton")
-btnDuplicateClip.Size = UDim2.new(0, 58, 1, 0)
-btnDuplicateClip.BackgroundColor3 = C.bg2
-btnDuplicateClip.Text = "Duplicate"
-btnDuplicateClip.TextColor3 = C.accentSoft
-btnDuplicateClip.Font = Enum.Font.GothamMedium
-btnDuplicateClip.TextSize = 9
-btnDuplicateClip.Parent = clipActionsRow
-applyCorner(btnDuplicateClip, 4)
-applyStroke(btnDuplicateClip, C.border, 1, 0.5)
-
-local btnDeleteClip = Instance.new("TextButton")
-btnDeleteClip.Size = UDim2.new(0, 50, 1, 0)
-btnDeleteClip.BackgroundColor3 = Color3.fromRGB(35, 12, 18)
-btnDeleteClip.Text = "Delete"
-btnDeleteClip.TextColor3 = C.danger
-btnDeleteClip.Font = Enum.Font.GothamBold
-btnDeleteClip.TextSize = 9
-btnDeleteClip.Parent = clipActionsRow
-applyCorner(btnDeleteClip, 4)
-applyStroke(btnDeleteClip, Color3.fromRGB(110, 30, 45), 1, 0.4)
-
-local btnToggleInspector = Instance.new("TextButton")
-btnToggleInspector.Size = UDim2.new(0, 22, 1, 0)
-btnToggleInspector.BackgroundColor3 = C.bg3
-btnToggleInspector.Text = "^"
-btnToggleInspector.TextColor3 = C.text3
-btnToggleInspector.Font = Enum.Font.GothamBold
-btnToggleInspector.TextSize = 10
-btnToggleInspector.Parent = clipActionsRow
-applyCorner(btnToggleInspector, 4)
-applyStroke(btnToggleInspector, C.border, 1, 0.5)
-
--- Container for Lower Rows (collapsible with btnToggleInspector)
-local inspLowerContent = Instance.new("Frame")
-inspLowerContent.Size = UDim2.new(1, 0, 0, 72)
-inspLowerContent.Position = UDim2.new(0, 0, 0, 30)
-inspLowerContent.BackgroundTransparency = 1
-inspLowerContent.Parent = inspContent
-
--- ROW 2: Unified Dual-Handle Horizontal Crop / Trim Bar (Height: 28px)
-local trimRow = Instance.new("Frame")
-trimRow.Size = UDim2.new(1, 0, 0, 26)
-trimRow.Position = UDim2.new(0, 0, 0, 2)
-trimRow.BackgroundTransparency = 1
-trimRow.Parent = inspLowerContent
-
-local trimStartLabel = Instance.new("TextLabel")
-trimStartLabel.Size = UDim2.new(0, 54, 1, 0)
-trimStartLabel.Position = UDim2.new(0, 0, 0, 0)
-trimStartLabel.BackgroundTransparency = 1
-trimStartLabel.Text = "Trim In:"
-trimStartLabel.TextColor3 = C.textMuted
-trimStartLabel.Font = Enum.Font.GothamMedium
-trimStartLabel.TextSize = 9
-trimStartLabel.TextXAlignment = Enum.TextXAlignment.Left
-trimStartLabel.Parent = trimRow
-
-local trimStartBox = Instance.new("TextBox")
-trimStartBox.Size = UDim2.new(0, 48, 0, 20)
-trimStartBox.Position = UDim2.new(0, 54, 0.5, -10)
-trimStartBox.BackgroundColor3 = C.input
-trimStartBox.Text = "0.00"
-trimStartBox.TextColor3 = C.text
-trimStartBox.Font = Enum.Font.Code
-trimStartBox.TextSize = 10
-trimStartBox.Parent = trimRow
-applyCorner(trimStartBox, 4)
-applyStroke(trimStartBox, C.divider, 1, 0)
-
-local trimSliderTrack = Instance.new("Frame")
-trimSliderTrack.Size = UDim2.new(1, -220, 0, 10)
-trimSliderTrack.Position = UDim2.new(0, 110, 0.5, -5)
-trimSliderTrack.BackgroundColor3 = C.bg3
-trimSliderTrack.Parent = trimRow
-applyCorner(trimSliderTrack, 5)
-
-local trimActiveFill = Instance.new("Frame")
-trimActiveFill.Size = UDim2.new(1, 0, 1, 0)
-trimActiveFill.BackgroundColor3 = C.accent
-trimActiveFill.BorderSizePixel = 0
-trimActiveFill.Parent = trimSliderTrack
-applyCorner(trimActiveFill, 5)
-
-local trimStartHandle = Instance.new("TextButton")
-trimStartHandle.Size = UDim2.new(0, 12, 0, 16)
-trimStartHandle.Position = UDim2.new(0, -6, 0.5, -8)
-trimStartHandle.BackgroundColor3 = C.white
-trimStartHandle.Text = ""
-trimStartHandle.ZIndex = 20
-trimStartHandle.Parent = trimSliderTrack
-applyCorner(trimStartHandle, 3)
-
-local trimEndHandle = Instance.new("TextButton")
-trimEndHandle.Size = UDim2.new(0, 12, 0, 16)
-trimEndHandle.Position = UDim2.new(1, -6, 0.5, -8)
-trimEndHandle.BackgroundColor3 = C.green
-trimEndHandle.Text = ""
-trimEndHandle.ZIndex = 20
-trimEndHandle.Parent = trimSliderTrack
-applyCorner(trimEndHandle, 3)
-
-local trimEndLabel = Instance.new("TextLabel")
-trimEndLabel.Size = UDim2.new(0, 52, 1, 0)
-trimEndLabel.Position = UDim2.new(1, -104, 0, 0)
-trimEndLabel.BackgroundTransparency = 1
-trimEndLabel.Text = "Trim Out:"
-trimEndLabel.TextColor3 = C.textMuted
-trimEndLabel.Font = Enum.Font.GothamMedium
-trimEndLabel.TextSize = 9
-trimEndLabel.TextXAlignment = Enum.TextXAlignment.Right
-trimEndLabel.Parent = trimRow
-
-local trimEndBox = Instance.new("TextBox")
-trimEndBox.Size = UDim2.new(0, 48, 0, 20)
-trimEndBox.Position = UDim2.new(1, -48, 0.5, -10)
-trimEndBox.BackgroundColor3 = C.input
-trimEndBox.Text = "0.00"
-trimEndBox.TextColor3 = C.text
-trimEndBox.Font = Enum.Font.Code
-trimEndBox.TextSize = 10
-trimEndBox.Parent = trimRow
-applyCorner(trimEndBox, 4)
-applyStroke(trimEndBox, C.divider, 1, 0)
-
--- Aliases for backwards compatibility with helper functions
-local trimStartSlider = trimSliderTrack
-local trimEndSlider = trimSliderTrack
-local trimStartFill = trimActiveFill
-local trimEndFill = trimActiveFill
-
--- ROW 3: Speed Pills & Transition Presets (Height: 26px)
-local speedTransRow = Instance.new("Frame")
-speedTransRow.Size = UDim2.new(1, 0, 0, 24)
-speedTransRow.Position = UDim2.new(0, 0, 0, 36)
-speedTransRow.BackgroundTransparency = 1
-speedTransRow.Parent = inspLowerContent
-
-local speedLabel = Instance.new("TextLabel")
-speedLabel.Size = UDim2.new(0, 42, 1, 0)
-speedLabel.Position = UDim2.new(0, 0, 0, 0)
-speedLabel.BackgroundTransparency = 1
-speedLabel.Text = "Speed:"
-speedLabel.TextColor3 = C.textMuted
-speedLabel.Font = Enum.Font.GothamMedium
-speedLabel.TextSize = 9
-speedLabel.TextXAlignment = Enum.TextXAlignment.Left
-speedLabel.Parent = speedTransRow
-
-local speedBtnsContainer = Instance.new("Frame")
-speedBtnsContainer.Size = UDim2.new(0, 230, 0, 20)
-speedBtnsContainer.Position = UDim2.new(0, 44, 0.5, -10)
-speedBtnsContainer.BackgroundTransparency = 1
-speedBtnsContainer.Parent = speedTransRow
-
-local speedLayout = Instance.new("UIListLayout")
-speedLayout.FillDirection = Enum.FillDirection.Horizontal
-speedLayout.Padding = UDim.new(0, 3)
-speedLayout.Parent = speedBtnsContainer
-
-local speedButtons = {}
-local speedOptions = { 0.5, 0.75, 1.0, 1.25, 1.5, 2.0 }
-
--- Row divider
-local midDiv = Instance.new("Frame")
-midDiv.Size = UDim2.new(0, 1, 0, 16)
-midDiv.Position = UDim2.new(0, 282, 0.5, -8)
-midDiv.BackgroundColor3 = C.border
-midDiv.BorderSizePixel = 0
-midDiv.Parent = speedTransRow
-
-local transLabel = Instance.new("TextLabel")
-transLabel.Size = UDim2.new(0, 64, 1, 0)
-transLabel.Position = UDim2.new(0, 290, 0, 0)
-transLabel.BackgroundTransparency = 1
-transLabel.Text = "Transition:"
-transLabel.TextColor3 = C.accentSoft
-transLabel.Font = Enum.Font.GothamBold
-transLabel.TextSize = 9
-transLabel.TextXAlignment = Enum.TextXAlignment.Left
-transLabel.Parent = speedTransRow
-
-local transInfoLabel = Instance.new("TextLabel")
-transInfoLabel.Size = UDim2.new(0, 240, 1, 0)
-transInfoLabel.Position = UDim2.new(0, 356, 0, 0)
-transInfoLabel.BackgroundTransparency = 1
-transInfoLabel.Text = "(First clip starts directly without transition)"
-transInfoLabel.TextColor3 = C.textMuted
-transInfoLabel.Font = Enum.Font.Gotham
-transInfoLabel.TextSize = 9
-transInfoLabel.TextXAlignment = Enum.TextXAlignment.Left
-transInfoLabel.Visible = false
-transInfoLabel.Parent = speedTransRow
-
-local transBtnsContainer = Instance.new("Frame")
-transBtnsContainer.Size = UDim2.new(1, -410, 0, 20)
-transBtnsContainer.Position = UDim2.new(0, 356, 0.5, -10)
-transBtnsContainer.BackgroundTransparency = 1
-transBtnsContainer.Parent = speedTransRow
-
-local transLayout = Instance.new("UIListLayout")
-transLayout.FillDirection = Enum.FillDirection.Horizontal
-transLayout.Padding = UDim.new(0, 3)
-transLayout.Parent = transBtnsContainer
-
-local transDurationBox = Instance.new("TextBox")
-transDurationBox.Size = UDim2.new(0, 48, 0, 20)
-transDurationBox.Position = UDim2.new(1, -48, 0.5, -10)
-transDurationBox.BackgroundColor3 = C.bg3
-transDurationBox.Text = "0.22s"
-transDurationBox.TextColor3 = C.text
-transDurationBox.Font = Enum.Font.Code
-transDurationBox.TextSize = 9
-transDurationBox.Parent = speedTransRow
-applyCorner(transDurationBox, 4)
-applyStroke(transDurationBox, C.glassBorder, 1, 0.5)
-
-local transitionPresetList = {
-    { key = "None", label = "Cut" },
-    { key = "Quick", label = "Quick (0.12s)" },
-    { key = "Smooth", label = "Smooth (0.22s)" },
-    { key = "Flow", label = "Flow (0.34s)" },
-    { key = "Soft", label = "Soft (0.48s)" },
-}
-
--- LOWER ZONE: MULTI-CLIP VISUAL TIMELINE TRACK (Generous Space: Full Height - 104px)
-local timelineSection = Instance.new("Frame")
-timelineSection.Size = UDim2.new(1, 0, 1, -104)
-timelineSection.Position = UDim2.new(0, 0, 0, 104)
-timelineSection.BackgroundColor3 = C.trackBg
-timelineSection.BorderSizePixel = 0
-timelineSection.ClipsDescendants = true
-timelineSection.Parent = rightPanel
-
--- Toggle Inspector collapse/expand
-local isInspectorCollapsed = false
-btnToggleInspector.MouseButton1Click:Connect(function()
-    isInspectorCollapsed = not isInspectorCollapsed
-    local ti = TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    if isInspectorCollapsed then
-        btnToggleInspector.Text = "v"
-        inspLowerContent.Visible = false
-        TweenService:Create(inspectorFrame, ti, {Size = UDim2.new(1, 0, 0, 28)}):Play()
-        TweenService:Create(timelineSection, ti, {Position = UDim2.new(0, 0, 0, 28), Size = UDim2.new(1, 0, 1, -28)}):Play()
-    else
-        btnToggleInspector.Text = "^"
-        TweenService:Create(inspectorFrame, ti, {Size = UDim2.new(1, 0, 0, 104)}):Play()
-        TweenService:Create(timelineSection, ti, {Position = UDim2.new(0, 0, 0, 104), Size = UDim2.new(1, 0, 1, -104)}):Play()
-        task.delay(0.15, function()
-            if not isInspectorCollapsed then
-                inspLowerContent.Visible = true
-            end
-        end)
-    end
-end)
-
--- Timeline Horizontal Scroll Container
+-- LOWER ZONE: MULTI-CLIP VISUAL TIMELINE TRACK (Height: 96px)
 local timelineScroll = Instance.new("ScrollingFrame")
-timelineScroll.Size = UDim2.new(1, 0, 1, 0)
+timelineScroll.Size = UDim2.new(1, 0, 1, -36)
+timelineScroll.Position = UDim2.new(0, 0, 0, 36)
 timelineScroll.BackgroundTransparency = 1
 timelineScroll.BorderSizePixel = 0
-timelineScroll.ScrollBarThickness = 5
+timelineScroll.ScrollBarThickness = 4
 timelineScroll.ScrollBarImageColor3 = C.border
 timelineScroll.ScrollBarImageTransparency = 0.5
 timelineScroll.ScrollingDirection = Enum.ScrollingDirection.X
@@ -1346,7 +1328,7 @@ timelineScroll.Parent = timelineSection
 
 -- Time Ruler (Top of Sequencer)
 local rulerContainer = Instance.new("Frame")
-rulerContainer.Size = UDim2.new(1, 0, 0, 28)
+rulerContainer.Size = UDim2.new(1, 0, 0, 22)
 rulerContainer.BackgroundColor3 = C.rulerBg
 rulerContainer.BorderSizePixel = 0
 rulerContainer.Parent = timelineScroll
@@ -1359,9 +1341,9 @@ rulerTicksFrame.Parent = rulerContainer
 
 -- Clips Track Lane (Middle)
 local trackLane = Instance.new("Frame")
-trackLane.Size = UDim2.new(1, 0, 0, 96)
-trackLane.Position = UDim2.new(0, 0, 0, 36)
-trackLane.BackgroundColor3 = Color3.fromRGB(15, 15, 18)
+trackLane.Size = UDim2.new(1, 0, 0, 68)
+trackLane.Position = UDim2.new(0, 0, 0, 24)
+trackLane.BackgroundColor3 = Color3.fromRGB(13, 13, 16)
 trackLane.BorderSizePixel = 0
 trackLane.Parent = timelineScroll
 applyStroke(trackLane, C.divider, 1, 0)
@@ -1404,10 +1386,10 @@ applyStroke(playheadTimeBubble, C.red, 1, 0.4)
 
 -- Empty Track helper text
 local emptyTrackLabel = Instance.new("TextLabel")
-emptyTrackLabel.Size = UDim2.new(0, 360, 0, 40)
-emptyTrackLabel.Position = UDim2.new(0, 20, 0, 20)
+emptyTrackLabel.Size = UDim2.new(0, 380, 0, 40)
+emptyTrackLabel.Position = UDim2.new(0, 20, 0, 14)
 emptyTrackLabel.BackgroundTransparency = 1
-emptyTrackLabel.Text = "No clips on timeline.\nClick [+ Add to Track] on any animation in the Media Library to begin."
+emptyTrackLabel.Text = "No clips on timeline.\nClick [+ Track] on any animation in the Media Library to begin."
 emptyTrackLabel.TextColor3 = C.textMuted
 emptyTrackLabel.Font = Enum.Font.GothamMedium
 emptyTrackLabel.TextSize = 11
@@ -1415,7 +1397,18 @@ emptyTrackLabel.TextXAlignment = Enum.TextXAlignment.Left
 emptyTrackLabel.Visible = true
 emptyTrackLabel.Parent = trackLane
 
--- ══════════════════════════════════════════════════════════════════
+-- Studio Master Minimize Toggle (Yellow dot)
+local isStudioMinimized = false
+minimizeBtn.MouseButton1Click:Connect(function()
+    isStudioMinimized = not isStudioMinimized
+    local visible = not isStudioMinimized
+    libraryPanel.Visible = visible and (not isLibCollapsed)
+    inspectorFrame.Visible = visible and (not isInspCollapsed)
+    timelineSection.Visible = visible
+    btnSlideExpandLib.Visible = visible and isLibCollapsed
+    btnSlideExpandInsp.Visible = visible and isInspCollapsed
+end)
+
 -- 8. RENDER & INTERACTION ENGINE
 -- ══════════════════════════════════════════════════════════════════
 local renderTimelineTrack
@@ -1759,14 +1752,17 @@ function updateInspectorUI()
     trimStartHandle.Position = UDim2.new(startPct, -6, 0.5, -8)
     trimEndHandle.Position = UDim2.new(endPct, -6, 0.5, -8)
 
-    -- Update Speed Buttons Highlight
+    -- Update Speed Buttons in 2 rows of 3
     for _, btn in ipairs(speedBtnsContainer:GetChildren()) do
         if btn:IsA("TextButton") then btn:Destroy() end
     end
 
-    for _, spd in ipairs(speedOptions) do
+    for i, spd in ipairs(speedOptions) do
+        local col = (i - 1) % 3
+        local row = math.floor((i - 1) / 3)
         local sBtn = Instance.new("TextButton")
-        sBtn.Size = UDim2.new(0, 38, 1, 0)
+        sBtn.Size = UDim2.new(0, 74, 0, 22)
+        sBtn.Position = UDim2.new(0, col * 78, 0, row * 26)
         sBtn.BackgroundColor3 = (clip.speed == spd) and C.accent or C.bg2
         sBtn.Text = tostring(spd) .. "x"
         sBtn.TextColor3 = (clip.speed == spd) and C.white or C.text3
@@ -1786,12 +1782,12 @@ function updateInspectorUI()
     -- Update Transition In Controls (PrestigeX Transitions)
     if idx == 1 then
         transInfoLabel.Visible = true
+        transDurRow.Visible = false
         transBtnsContainer.Visible = false
-        transDurationBox.Visible = false
     else
         transInfoLabel.Visible = false
+        transDurRow.Visible = true
         transBtnsContainer.Visible = true
-        transDurationBox.Visible = true
 
         clip.transition = clip.transition or {
             enabled = true,
@@ -1807,13 +1803,22 @@ function updateInspectorUI()
             if btn:IsA("TextButton") then btn:Destroy() end
         end
 
-        for _, opt in ipairs(transitionPresetList) do
+        local presetPositions = {
+            { x = 0, y = 0, w = 48 },     -- Cut
+            { x = 52, y = 0, w = 58 },    -- Quick
+            { x = 114, y = 0, w = 66 },   -- Smooth
+            { x = 184, y = 0, w = 52 },   -- Flow
+            { x = 0, y = 26, w = 52 },    -- Soft
+        }
+
+        for i, opt in ipairs(transitionPresetList) do
+            local pos = presetPositions[i] or { x = 0, y = 0, w = 50 }
             local tBtn = Instance.new("TextButton")
-            tBtn.Size = UDim2.new(0, 0, 1, 0)
-            tBtn.AutomaticSize = Enum.AutomaticSize.X
+            tBtn.Size = UDim2.new(0, pos.w, 0, 22)
+            tBtn.Position = UDim2.new(0, pos.x, 0, pos.y)
             local isSel = (clip.transition.mode == opt.key)
             tBtn.BackgroundColor3 = isSel and Color3.fromRGB(55, 20, 48) or C.bg2
-            tBtn.Text = " " .. opt.label .. " "
+            tBtn.Text = opt.label:gsub(" %([%d%.]+s%)", "")
             tBtn.TextColor3 = isSel and C.accentSoft or C.text3
             tBtn.Font = Enum.Font.GothamBold
             tBtn.TextSize = 9
