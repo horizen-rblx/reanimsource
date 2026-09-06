@@ -117,8 +117,66 @@ end
 -- Resolve joints in avatar (clone or character)
 local cachedJoints = {}
 
+local function restoreAvatarToNormal(targetChar)
+    targetChar = targetChar or player.Character
+    if not targetChar then return end
+
+    if Timeline then
+        Timeline.isPlaying = false
+        Timeline.isHoldingPose = false
+        if Timeline.playbackConn then
+            Timeline.playbackConn:Disconnect()
+            Timeline.playbackConn = nil
+        end
+    end
+
+    table.clear(cachedJoints)
+
+    -- Reset all Motor6Ds / JointInstances to identity CFrame so character returns to natural idle/walk
+    for _, desc in ipairs(targetChar:GetDescendants()) do
+        if desc:IsA("Motor6D") or desc:IsA("JointInstance") then
+            pcall(function()
+                desc.Transform = CFrame.new()
+            end)
+        end
+    end
+
+    -- Restore Humanoid default states
+    local hum = targetChar:FindFirstChildOfClass("Humanoid")
+    if hum then
+        pcall(function()
+            hum.PlatformStand = false
+            hum.AutoRotate = true
+            hum.RequiresNeck = true
+            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+            hum:ChangeState(Enum.HumanoidStateType.Landed)
+            hum:ChangeState(Enum.HumanoidStateType.Running)
+        end)
+    end
+
+    -- Re-enable default Roblox Animate script cleanly
+    local animScript = targetChar:FindFirstChild("Animate")
+    if animScript then
+        pcall(function()
+            animScript.Disabled = true
+            task.wait()
+            animScript.Disabled = false
+        end)
+    end
+
+    -- Ensure camera subject points to humanoid
+    pcall(function()
+        if workspace.CurrentCamera and hum then
+            workspace.CurrentCamera.CameraSubject = hum
+        end
+    end)
+end
+
 local function prepareTargetChar(targetChar)
     if not targetChar then return end
+    local isRean = (api and api.is_reanimated and api.is_reanimated())
+    if not isRean then return end -- Guard: never disable default animation script if not reanimated!
+
     local hum = targetChar:FindFirstChildOfClass("Humanoid") or targetChar:FindFirstChildOfClass("AnimationController")
     if hum then
         pcall(function()
@@ -413,6 +471,9 @@ end
 -- Apply exact interpolated pose to avatar joints at time T with PrestigeX smooth transitions
 local function evaluateAndPoseAvatar(globalTime)
     if #Timeline.clips == 0 or Timeline.totalDuration <= 0 then return end
+
+    local isRean = (api and api.is_reanimated and api.is_reanimated())
+    if not isRean then return end -- Guard: never pose avatar if reanim is disabled!
 
     local activeChar = (api and api.get_clone and api.get_clone()) or player.Character
     if cachedJoints._target ~= activeChar or not next(cachedJoints) then
@@ -1381,14 +1442,29 @@ btnToggleReanim.MouseButton1Click:Connect(function()
     btnToggleReanim.TextColor3 = C.text3
 
     task.spawn(function()
-        local err = api.reanimate(newState)
-        if err and typeof(err) == "string" and err ~= "Already reanimated." then
-            warn("Zen Studio: " .. err)
-        end
-        updateReanimButton()
-        table.clear(cachedJoints)
-        cacheAvatarJoints()
-        if newState then
+        if not newState then
+            -- Cleanly disable: stop timeline playback, release pose hold, and restore normal avatar
+            if Timeline.isPlaying and stopPlayback then stopPlayback() end
+            Timeline.isHoldingPose = false
+
+            local err = api.reanimate(false)
+            if err and typeof(err) == "string" and err ~= "Already reanimated." then
+                warn("Zen Studio: " .. err)
+            end
+
+            task.wait(0.08)
+            updateReanimButton()
+            restoreAvatarToNormal(player.Character)
+        else
+            -- Cleanly enable: reanimate avatar, bind joints, and pose at current playhead
+            local err = api.reanimate(true)
+            if err and typeof(err) == "string" and err ~= "Already reanimated." then
+                warn("Zen Studio: " .. err)
+            end
+
+            updateReanimButton()
+            table.clear(cachedJoints)
+            cacheAvatarJoints()
             Timeline.isHoldingPose = true
             setScrubberTime(Timeline.currentTime)
         end
@@ -1559,7 +1635,7 @@ end)
 
 -- Window Close Handler (Red Dot)
 closeBtn.MouseButton1Click:Connect(function()
-    Timeline.isPlaying = false
+    if Timeline.isPlaying and stopPlayback then stopPlayback() end
     Timeline.isHoldingPose = false
     if Timeline.playbackConn then
         Timeline.playbackConn:Disconnect()
@@ -1570,13 +1646,10 @@ closeBtn.MouseButton1Click:Connect(function()
         steppedConn = nil
     end
     pcall(function()
-        local targetChar = (api and api.get_clone and api.get_clone()) or player.Character
-        if targetChar then
-            local animScript = targetChar:FindFirstChild("Animate")
-            if animScript then
-                animScript.Disabled = false
-            end
+        if api and api.reanimate and api.is_reanimated and api.is_reanimated() then
+            api.reanimate(false)
         end
+        restoreAvatarToNormal(player.Character)
     end)
     screenGui:Destroy()
 end)
@@ -1590,14 +1663,17 @@ setScrubberTime = function(targetTime)
     recalculateTimeline()
     local clamped = math.clamp(targetTime, 0, math.max(0.1, Timeline.totalDuration))
     Timeline.currentTime = clamped
-    Timeline.isHoldingPose = true
     timecodeLabel.Text = formatTime(clamped)
     playheadTimeBubble.Text = string.format("%04.1fs", clamped)
 
     local posX = clamped * Timeline.pixelsPerSecond
     playhead.Position = UDim2.new(0, posX, 0, 0)
 
-    evaluateAndPoseAvatar(clamped)
+    local isRean = (api and api.is_reanimated and api.is_reanimated())
+    if isRean then
+        Timeline.isHoldingPose = true
+        evaluateAndPoseAvatar(clamped)
+    end
 end
 
 -- Scrubbing Interaction
@@ -1740,6 +1816,9 @@ end)
 -- Continuous Stepped Connection for Smooth Avatar Joint Posing
 if steppedConn then steppedConn:Disconnect() end
 steppedConn = RunService.Stepped:Connect(function()
+    local isRean = (api and api.is_reanimated and api.is_reanimated())
+    if not isRean then return end
+
     if Timeline.isPlaying or isScrubbing or Timeline.isHoldingPose then
         evaluateAndPoseAvatar(Timeline.currentTime)
     end
